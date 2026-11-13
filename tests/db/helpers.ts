@@ -23,6 +23,7 @@ export function newUid(): string {
 /** Tables holding per-user data, keyed by the listed column. Extended as later tasks add tables. */
 const USER_TABLES: [string, string][] = [
   ['manual_grants', 'user_id'],
+  ['access_codes', 'redeemed_by'],
   ['user_roles', 'user_id'],
   ['profiles', 'id'],
 ];
