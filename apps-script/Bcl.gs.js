@@ -41,7 +41,7 @@ function processOrder(orderRef, source) {
   var fm = fieldMap();
   var txn = fetchBclTransaction(orderRef);
   if (!isPaidLive(txn)) {
-    logBcl(orderRef, 'ignored', 'not paid live (' + source + ')', { status: txn && txn.status, type: txn && txn.type });
+    logBcl(orderRef, 'skipped', 'not paid live (' + source + ')', { status: txn && txn.status, type: txn && txn.type });
     return { ok: false, reason: 'not_paid_live' };
   }
   var cfg = workerData('GET', '/internal/bcl-config');
@@ -65,7 +65,7 @@ function processOrder(orderRef, source) {
   });
   logBcl(orderRef, r && r.ok ? 'processed' : 'error', (r && (r.reason || '')) + ' (' + source + ')', r && r.ok ? null : txn);
   if (r && r.ok) {
-    try { processEmailQueue(); } catch (e) { console.error('email queue: ' + e); }
+    try { processEmailQueue_(); } catch (e) { console.error('email queue: ' + e); }
   }
   return r;
 }
@@ -110,6 +110,8 @@ function pollBcl() {
       if (ref) paid.push(ref);
     }
     if (!paid.length) return;
+    // CONTRACT: /internal/known-orders returns refs that exist in purchases OR are logged in bcl_webhook_log
+    // with kind 'ignored' (unmapped forms, logged by processOrder with order_ref), so polling doesn't re-fetch them.
     var known = workerData('POST', '/internal/known-orders', { refs: paid });
     var knownSet = {};
     var kl = (known && known.refs) || known || [];

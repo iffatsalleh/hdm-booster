@@ -40,6 +40,9 @@ describe('matchPackage', () => {
   it('known form, amount mismatch -> mapped but no package', () => {
     expect(g.matchPackage({ formable_id: '77', amount: '80.00' }, rows)).toEqual({ packageId: null, mapped: true });
   });
+  it('missing formable_id -> unmapped (no amount-only guess)', () => {
+    expect(g.matchPackage({ amount: '100.00' }, rows)).toEqual({ packageId: null, mapped: false });
+  });
   it('tolerance is configurable', () => {
     expect(g.matchPackage({ formable_id: '77', amount: '102.50' }, rows, { tolerance: 1 })).toEqual({ packageId: null, mapped: true });
   });

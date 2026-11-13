@@ -29,11 +29,13 @@ function workerData(method, path, body) {
   return r.data;
 }
 
-function logBcl(orderRef, status, detail, payload) {
+/** kind: 'ignored' (unmapped form; Worker treats as known), 'skipped' (not paid live yet), 'processed', 'error'. */
+function logBcl(orderRef, kind, detail, payload) {
   try {
     workerCall('POST', '/internal/bcl-log', {
       order_ref: orderRef || null,
-      status: status,
+      kind: kind,
+      status: kind,
       detail: detail || null,
       payload: payload === undefined ? null : payload
     });

@@ -97,11 +97,13 @@ function matchPackage(txn, rows, opts) {
   var tol = typeof opts.tolerance === 'number' ? opts.tolerance : 3;
   var fm = opts.fieldMap || defaultFieldMap();
   var fid = _pick(txn, fm.formable_id);
+  // No formable_id (e.g. wrong BCL_FIELD_MAP): never guess by amount across unrelated products.
+  if (fid === null) return { packageId: null, mapped: false };
   var cand = [];
   for (var i = 0; i < (rows || []).length; i++) {
-    if (fid === null || String(rows[i].formable_id) === String(fid)) cand.push(rows[i]);
+    if (String(rows[i].formable_id) === String(fid)) cand.push(rows[i]);
   }
-  if (fid !== null && cand.length === 0) return { packageId: null, mapped: false };
+  if (cand.length === 0) return { packageId: null, mapped: false };
   var amt = parseFloat(_pick(txn, fm.amount));
   var fv = _pick(txn, fm.field_value);
   var j;
