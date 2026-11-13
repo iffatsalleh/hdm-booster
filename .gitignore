@@ -8,3 +8,4 @@ node_modules/
 .env
 .env.test
 apps-script/.clasprc.json
+.env.prod

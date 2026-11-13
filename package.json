@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "vitest run --config vitest.config.ts",
+    "migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@phosphor-icons/web": "2.1.2",
@@ -24,3 +25,4 @@
     "vitest": "2.1.9"
   }
 }
+
