@@ -43,3 +43,34 @@ select 'Batch Rejab 1448',
          {"key":"ramadan","start":"2027-02-08","end":"2027-03-09"}]'::jsonb,
        'akan_datang'
 where not exists (select 1 from batches where name = 'Batch Rejab 1448');
+
+-- ---------- content seed (Task 5) ----------
+-- Ebooks: placeholders, file_drive_id stays null until the owner uploads. Re-runs refresh title/number/sort only.
+insert into ebooks (item_key, number, title, sort) values
+  ('ebook_strategi',           1, 'Ebook Strategi HDM BOOSTER (Updated Version)', 1),
+  ('ebook_muscle_mania',       2, 'Ebook MUSCLE MANIA',                           2),
+  ('ebook_traditional_remedy', 3, 'Ebook TRADITIONAL REMEDY',                     3),
+  ('ebook_tas',                4, 'Ebook TAS',                                    4),
+  ('ebook_food_swap',          5, 'Ebook FOOD SWAP MATRIX',                       5),
+  ('ebook_emergency',          6, 'Ebook HDM EMERGENCY PROTOCOL',                 6),
+  ('ebook_supplement',         7, 'Ebook HDM SUPPLEMENT STACK',                   7)
+on conflict (item_key) do update set number = excluded.number, title = excluded.title, sort = excluded.sort;
+
+-- Groups: batch_id null = all batches. Unique (item_key, batch_id) nulls not distinct, so the upsert is stable.
+-- invite_url is NOT overwritten on re-run (the owner replaces the placeholder).
+insert into groups (item_key, batch_id, name, coach, description, invite_url) values
+  ('group_hdm', null, 'Group HDM', 'Coach Iffat Salleh',
+   'Group sokongan pemakanan HDM bersama Coach Iffat.', 'https://chat.whatsapp.com/PLACEHOLDER-GROUP-HDM'),
+  ('group_muscle_mania', null, 'Group Muscle Mania', 'Coach Anuar Yusof "Toy"',
+   'Group sokongan Muscle Mania bersama Coach Toy.', 'https://chat.whatsapp.com/PLACEHOLDER-GROUP-MUSCLE-MANIA')
+on conflict (item_key, batch_id) do update set name = excluded.name, coach = excluded.coach, description = excluded.description;
+
+-- Settings: public ones reach every participant via app_bootstrap; private ones are admin/Worker only.
+-- Values are not overwritten on re-run (the owner edits them); only the public flag is enforced.
+insert into app_settings (key, value, public) values
+  ('support_wa', '"60134417042"'::jsonb, true),
+  ('wa_upgrade_text', to_jsonb('Salam, saya ingin naik taraf ke Pakej Complete HDM BOOSTER. Emel pendaftaran: {emel}'::text), true),
+  ('upgrade_note', to_jsonb('Naik taraf ke Pakej Complete untuk buka Ebook 02-07 dan Group Muscle Mania.'::text), true),
+  ('wa_template_purchase', to_jsonb('Salam {nama}, terima kasih atas pembelian HDM BOOSTER. Daftar akaun di {pautan} guna emel dan nombor telefon yang sama semasa pembelian.'::text), false),
+  ('wa_template_code', to_jsonb('Salam {nama}, ini kod akses HDM BOOSTER anda: {kod}. Aktifkan di {pautan}.'::text), false)
+on conflict (key) do update set public = excluded.public;

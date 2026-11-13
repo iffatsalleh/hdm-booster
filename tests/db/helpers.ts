@@ -24,6 +24,7 @@ export function newUid(): string {
 const USER_TABLES: [string, string][] = [
   ['manual_grants', 'user_id'],
   ['access_codes', 'redeemed_by'],
+  ['reading_progress', 'user_id'],
   ['user_roles', 'user_id'],
   ['profiles', 'id'],
 ];
