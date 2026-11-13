@@ -1,0 +1,44 @@
+// HornetHive REST client (fetch). POST {base}/rest/{dbId}/query, Bearer key, {query, params} -> {columns, rows}.
+import type { Hive } from './types';
+
+export type HiveConfig = { base: string; dbId: string; key: string };
+
+export function createHive({ base, dbId, key }: HiveConfig): Hive {
+  const url = `${base.replace(/\/+$/, '')}/rest/${encodeURIComponent(dbId)}/query`;
+
+  async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: sql, params }),
+    });
+    const text = await res.text();
+    let body: any;
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = { error: text };
+    }
+    if (!res.ok || (body && typeof body === 'object' && body.error)) {
+      const parts = [String(body?.error || `HTTP ${res.status}`)];
+      if (body?.code) parts.push(`[${body.code}]`);
+      if (body?.details) parts.push(String(body.details));
+      if (body?.hint) parts.push(`hint: ${body.hint}`);
+      throw new Error(`hive: ${parts.join(' ')}`);
+    }
+    const rows: unknown[] = body?.rows ?? [];
+    if (rows.length && Array.isArray(rows[0]) && Array.isArray(body.columns)) {
+      const names: string[] = body.columns.map((c: string | { name: string }) => (typeof c === 'string' ? c : c.name));
+      return rows.map((r) => Object.fromEntries(names.map((nm, i) => [nm, (r as unknown[])[i]]))) as T[];
+    }
+    return rows as T[];
+  }
+
+  async function one<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T> {
+    const rows = await q<T>(sql, params);
+    if (rows.length !== 1) throw new Error(`hive: expected 1 row, got ${rows.length}`);
+    return rows[0];
+  }
+
+  return { q, one };
+}
