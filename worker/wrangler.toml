@@ -1,24 +1,13 @@
-name = "hdm-api-dev"
+name = "hdm-api"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
-# Secrets (set with `wrangler secret put <NAME> [--env prod]`):
+# Secrets (set with `wrangler secret put <NAME>`):
 #   HIVE_DML_KEY, INTERNAL_SECRET, TICKET_SECRET, FIREBASE_SA_JSON
 
 [vars]
 HIVE_API_BASE = "https://api.hornethive.io/v1"
-HIVE_DB_ID = "REPLACE_WITH_TEST_DB_ID"
-FIREBASE_PROJECT_ID = "REPLACE_WITH_FIREBASE_PROJECT_ID"
-ALLOWED_ORIGINS = "http://localhost:5173"
-GAS_URL = "REPLACE_WITH_GAS_WEBAPP_URL"
-
-[env.prod]
-name = "hdm-api"
-
-[env.prod.vars]
-HIVE_API_BASE = "https://api.hornethive.io/v1"
-HIVE_DB_ID = "REPLACE_WITH_PROD_DB_ID"
+HIVE_DB_ID = "REPLACE_WITH_DB_ID"
 FIREBASE_PROJECT_ID = "REPLACE_WITH_FIREBASE_PROJECT_ID"
 ALLOWED_ORIGINS = "https://REPLACE.blogspot.com,http://localhost:5173"
 GAS_URL = "REPLACE_WITH_GAS_WEBAPP_URL"
-

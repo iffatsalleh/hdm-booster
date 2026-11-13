@@ -84,7 +84,7 @@ describe('foundation', () => {
       app.request('/internal/ping', {
         method: 'POST',
         body,
-        headers: sig ? { 'X-Signature': sig } : {},
+        headers: sig ? { 'X-HDM-Sig': sig } : {},
       });
     expect((await post()).status).toBe(401);
     const stale = NOW - 1000;

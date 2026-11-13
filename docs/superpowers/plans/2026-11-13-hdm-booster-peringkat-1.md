@@ -54,17 +54,19 @@ tests/unit/* (existing + sqlsplit, hmac) · tests/db/* (SQL vs hdm_dev) · tests
 tests/gas/{load.ts, bclLogic.test.ts, hmac.test.ts}
 design/ (Superdesign canvas links + exported reference PNGs)
 blogspot/template.xml · scripts/deploy.mjs · scripts/loadtest.mjs · README.md
-.env.test.example (HIVE_API_BASE, HIVE_DB_ID, HIVE_DDL_KEY, HIVE_DML_KEY) · .env.example (VITE_FIREBASE_*, VITE_API_URL, VITE_GAS_URL)
+.env.prod.example (HIVE_API_BASE, HIVE_DB_ID, HIVE_DDL_KEY, HIVE_DML_KEY) · .env.example (VITE_FIREBASE_*, VITE_API_URL, VITE_GAS_URL)
 ```
 
-Test layers: `npm test` = unit + gas (no network). `npm run test:db` and `npm run test:worker` = against **hdm_dev** using `.env.test`. Worker tests call `createApp({verifyToken: fakeVerifier, hive, firebaseAdmin: fake, ...})` — a fake verifier maps `"tok:<uid>"` → `{uid, email}`; production `index.ts` wires the real JWKS verifier. No test-mode flag exists in production code.
+**Single environment (owner decision 13/11/2026):** there is no dev. One HornetHive DB `hdm_prod`, one Firebase project `hdm-prod`, one Worker `hdm-api`, one Apps Script deployment. All local keys live in `.env.prod` (gitignored); `.env.test*` files are retired. Wherever a task below says "dev", `hdm_dev`, `hdm-dev`, `.env.test` or `--env test`, read prod / `hdm_prod` / `hdm-prod` / `.env.prod` / `--env prod`. Until launch (01/12) the prod DB is empty and DB/Worker integration tests run against it with `test_`-prefixed uids cleaned up after each test; after launch, write-tests never run against prod (spec §3.4).
+
+Test layers: `npm test` = unit + gas (no network). `npm run test:db` and `npm run test:worker` = against **hdm_prod (pre-launch only)** using `.env.prod`. Worker tests call `createApp({verifyToken: fakeVerifier, hive, firebaseAdmin: fake, ...})` — a fake verifier maps `"tok:<uid>"` → `{uid, email}`; production `index.ts` wires the real JWKS verifier. No test-mode flag exists in production code.
 
 ---
 
 ## Prerequisites (owner does these; agent must not create accounts or enter real credentials)
 
-- [ ] HornetHive **Starter** plan; databases `hdm_dev`, `hdm_prod`; per database a `ddl`, `dml` and `read` key. Owner writes dev values into `.env.test` (and prod into `.env.prod`) from `.env.test.example`.
-- [ ] Firebase projects `hdm-dev`, `hdm-prod` (Spark): Authentication → Email/Password ON; authorised domain = the Blogspot domain (+ `localhost`); download a service account JSON per project (kept local, later `wrangler secret`).
+- [ ] HornetHive **Free** plan; one database `hdm_prod`; `ddl`, `dml` and `read` keys limited to it. Owner writes them into `.env.prod` (from `.env.prod.example`).
+- [ ] Firebase project `hdm-prod` (Spark): Authentication → Email/Password ON; authorised domain = the Blogspot domain (+ `localhost`); download the service account JSON (kept local, later `wrangler secret`).
 - [ ] Cloudflare account; owner runs `npx wrangler login` once on this PC.
 - [ ] GitHub account + public repo `hdm-booster`; Blogspot blog (e.g. `hdmbooster.blogspot.com`).
 - [ ] BCL API token + webhook key (later into Apps Script properties); Google account for Apps Script; owner runs `npx @google/clasp login` once.

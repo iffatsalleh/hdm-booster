@@ -21,10 +21,10 @@ export function parseEnv(text) {
 
 /** Load .env.<name> from the repo root; throws a clear error if missing. */
 export function loadEnv(name) {
-  if (name !== 'test' && name !== 'prod') throw new Error('--env must be "test" or "prod"');
+  if (name !== 'prod') throw new Error('--env must be "prod" (the only environment)');
   const file = new URL(`../.env.${name}`, import.meta.url);
   if (!existsSync(file)) {
-    throw new Error(`Missing .env.${name} (copy .env.test.example and fill in HornetHive values)`);
+    throw new Error(`Missing .env.${name} (copy .env.prod.example and fill in HornetHive values)`);
   }
   return parseEnv(readFileSync(file, 'utf8'));
 }

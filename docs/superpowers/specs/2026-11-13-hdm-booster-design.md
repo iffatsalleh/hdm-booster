@@ -79,9 +79,12 @@ HornetHive tiada RLS per-pengguna. Keselamatan dibina dalam tiga lapis:
 - Katalog (items, packages, ebooks, batch semasa, app_settings awam) di-cache dalam Cache API Worker 5 minit dan dalam browser.
 - Migrasi: fail SQL dalam `db/migrations/`, dijalankan oleh skrip `scripts/migrate.mjs` dengan kunci `ddl` (pecah fail kepada kenyataan, menghormati blok `$$`), rekod dalam jadual `schema_migrations`. Builder sahkan HornetHive membenarkan `create function … language plpgsql`, `create trigger`, `pgcrypto`/`gen_random_uuid()`; jika tidak, logik dipindah ke Worker.
 
-### 3.4 Persekitaran **[pereka]**
-- Pelan **HornetHive Starter (RM84/tahun)** dari awal: database `hdm_dev` dan `hdm_prod` (+1 simpanan). Pemilik sudah bersetuju membayar.
-- Dua projek Firebase (`hdm-dev`, `hdm-prod`), dua Worker (`hdm-api-dev`, `hdm-api`), dua deployment Apps Script.
+### 3.4 Persekitaran (keputusan pemilik 13/11/2026: prod sahaja)
+- **Satu persekitaran sahaja:** satu database HornetHive `hdm_prod`, satu projek Firebase `hdm-prod`, satu Worker `hdm-api`, satu deployment Apps Script. Tiada dev.
+- Pelan HornetHive **Free** mencukupi untuk satu database; naik ke Starter (RM84/tahun) hanya bila had panggilan/storan menghampiri.
+- **Sebelum pelancaran (sehingga 01/12):** ujian automatik DB/Worker berjalan terus pada prod yang masih kosong. Semua data ujian guna uid berawalan `test_` dan dipadam selepas setiap ujian.
+- **Selepas pelancaran:** ujian integrasi yang menulis data **tidak** dijalankan pada prod. Perubahan diuji dengan ujian unit + ujian Worker dengan Hive palsu, kemudian semakan asap (smoke) baca-sahaja pada prod. Backup manual HornetHive wajib sebelum setiap migrasi.
+- Risiko diterima pemilik: tiada tempat selamat untuk mencuba perubahan selepas peserta sebenar menggunakan sistem.
 
 ### 3.5 Frontend
 - Preact + TypeScript + Tailwind, dibina ke `dist/app.js` + `dist/app.css` (nama tetap), dihantar melalui jsDelivr; template Blogspot dibersihkan sepenuhnya.
@@ -145,7 +148,7 @@ Kekal skop v1 §6, melalui endpoint Worker `/api/admin/*`:
 
 | Perkhidmatan | Had relevan | Pendekatan |
 |---|---|---|
-| HornetHive Starter (RM84/thn) | 3 DB, 5 GB, 2.5M panggilan/bulan | 1 panggilan/skrin, cache katalog; papar penggunaan di Admin |
+| HornetHive Free (naik Starter RM84/thn bila perlu) | Free: 1 DB, 500 MB, 500K panggilan/bulan | 1 panggilan/skrin, cache katalog; papar penggunaan di Admin |
 | Cloudflare Workers Free | 100K permintaan/hari, 10 ms CPU | Pengesahan JWT dengan JWKS di-cache |
 | Firebase Auth (Spark) | 50K MAU; emel reset terbina | Pendaftaran awam dimatikan |
 | Apps Script | ~30 serentak, 6 min, MailApp ~100/hari | Hanya kerja jarang; baris gilir emel |
@@ -182,7 +185,7 @@ Kekal skop v1 §6, melalui endpoint Worker `/api/admin/*`:
 2. Pendaftaran awam Firebase dimatikan; akaun dicipta oleh Worker selepas padanan emel + telefon.
 3. Apps Script tidak sentuh HornetHive untuk ebook; ia hanya percaya tiket HMAC dari Worker.
 4. Apps Script menghantar pembelian melalui Worker (`/internal/purchase`, HMAC), bukan terus ke HornetHive — logik pembelian di satu tempat.
-5. HornetHive Starter dari hari pertama untuk dev + prod.
+5. ~~HornetHive Starter untuk dev + prod~~ — diganti keputusan pemilik: prod sahaja, pelan Free (§3.4).
 6. Ebook & TDEE akses selama-lamanya; tracker/cabaran/report ikut batch; group per batch (dari v1).
 7. Had sesi 2 peranti digugurkan buat masa ini (Firebase percuma tiada kawalan terbina).
 

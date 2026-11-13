@@ -1,15 +1,14 @@
-// Usage: npm run migrate -- --env test|prod [--seed]
+// Usage: npm run migrate [-- --env prod] [--seed]   (single environment: prod, reads .env.prod)
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { hiveQuery, loadEnv } from './hive.mjs';
 import { splitSql } from './sqlsplit.mjs';
 
 const args = process.argv.slice(2);
-const envName = args[args.indexOf('--env') + 1];
+const envName = args.includes('--env') ? args[args.indexOf('--env') + 1] : 'prod';
 const withSeed = args.includes('--seed');
 
 async function main() {
-  if (args.indexOf('--env') === -1) throw new Error('Usage: npm run migrate -- --env test|prod [--seed]');
   const env = loadEnv(envName);
   for (const k of ['HIVE_API_BASE', 'HIVE_DB_ID', 'HIVE_DDL_KEY']) {
     if (!env[k]) throw new Error(`.env.${envName} is missing ${k}`);

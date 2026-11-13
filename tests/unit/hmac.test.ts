@@ -26,4 +26,19 @@ describe('hmac', () => {
     expect(await verifyTicket('wrong', tk, t)).toBeNull();
     expect(await verifyTicket('k', 'nonsense', t)).toBeNull();
   });
+
+  test('ticket format: base64url payload with exp = now+300 and base64url MAC', async () => {
+    const tk = await signTicket('k', { ebookId: 'e', fileId: 'f', uid: 'u' }, t);
+    const [p, mac] = tk.split('.');
+    expect(tk).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+    expect(JSON.parse(atob(p.replace(/-/g, '+').replace(/_/g, '/')))).toEqual({ ebookId: 'e', fileId: 'f', uid: 'u', exp: t + 300 });
+    expect(mac.length).toBe(43);
+    expect(await verifyTicket('k', tk, t + 300)).not.toBeNull();
+  });
+
+  test('ticket with exp too far in the future is rejected', async () => {
+    const tk = await signTicket('k', { uid: 'u' }, t + 1000);
+    expect(await verifyTicket('k', tk, t)).toBeNull();
+    expect(await verifyTicket('k', tk, t + 1000)).not.toBeNull();
+  });
 });

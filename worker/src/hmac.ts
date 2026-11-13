@@ -1,13 +1,23 @@
 // HMAC-SHA256 helpers (Web Crypto). Reimplemented in apps-script/Hmac.gs.js — keep the algorithm identical.
-//   signature = hex(HMAC_SHA256(secret, `${t}.${body}`))     header: `t=<unix>,v1=<hex>`
-//   ticket    = base64url(JSON({...payload, iat})) + '.' + hex(HMAC_SHA256(secret, base64url part))
+//
+// Request signature (header X-HDM-Sig: `t=<unix seconds>,v1=<LOWERCASE HEX>`):
+//   v1 = hex(HMAC_SHA256(INTERNAL_SECRET, `${t}.${rawBody}`)); accepted when |now - t| <= 300s.
+//
+// Ticket (download ticket, string `<payload>.<mac>`):
+//   payload = base64url(JSON {ebookId, fileId, uid, exp})   exp = nowSec + 300  (unix seconds)
+//   mac     = base64url(HMAC_SHA256(TICKET_SECRET, payload))   <- MAC is over the base64url PAYLOAD STRING (not the raw JSON)
+//   base64url = standard base64 with '+'->'-', '/'->'_', padding '=' stripped.
+//   verify: MAC matches (constant time), exp is a number, nowSec <= exp, and exp <= nowSec + 300.
 const enc = new TextEncoder();
 const WINDOW_SEC = 300;
 
-async function hmacHex(secret: string, message: string): Promise<string> {
+async function hmacBytes(secret: string, message: string): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(message)));
-  return Array.from(sig, (b) => b.toString(16).padStart(2, '0')).join('');
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(message)));
+}
+
+async function hmacHex(secret: string, message: string): Promise<string> {
+  return Array.from(await hmacBytes(secret, message), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** Length-leak-only constant-time string comparison. */
@@ -18,8 +28,7 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-function b64urlEncode(text: string): string {
-  const bytes = enc.encode(text);
+function b64urlFromBytes(bytes: Uint8Array): string {
   let bin = '';
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -44,22 +53,23 @@ export async function verifySigHeader(secret: string, header: string, body: stri
 }
 
 export async function signTicket(secret: string, payload: Record<string, unknown>, nowSec: number): Promise<string> {
-  const part = b64urlEncode(JSON.stringify({ ...payload, iat: nowSec }));
-  return `${part}.${await hmacHex(secret, part)}`;
+  const part = b64urlFromBytes(enc.encode(JSON.stringify({ ...payload, exp: nowSec + WINDOW_SEC })));
+  return `${part}.${b64urlFromBytes(await hmacBytes(secret, part))}`;
 }
 
 export async function verifyTicket(
   secret: string,
   ticket: string,
   nowSec: number,
-): Promise<(Record<string, unknown> & { iat: number }) | null> {
+): Promise<(Record<string, unknown> & { exp: number }) | null> {
   const parts = (ticket ?? '').split('.');
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
-  if (!safeEqual(await hmacHex(secret, parts[0]), parts[1])) return null;
+  if (!safeEqual(b64urlFromBytes(await hmacBytes(secret, parts[0])), parts[1])) return null;
   try {
     const payload = JSON.parse(b64urlDecode(parts[0]));
-    if (typeof payload !== 'object' || payload === null || typeof payload.iat !== 'number') return null;
-    if (Math.abs(nowSec - payload.iat) > WINDOW_SEC) return null;
+    if (typeof payload !== 'object' || payload === null || typeof payload.exp !== 'number') return null;
+    if (nowSec > payload.exp) return null;
+    if (payload.exp > nowSec + WINDOW_SEC) return null;
     return payload;
   } catch {
     return null;

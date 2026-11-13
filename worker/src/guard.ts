@@ -3,7 +3,7 @@ import type { AppEnv, Deps } from './types';
 import { fail } from './errors';
 import { verifySigHeader } from './hmac';
 
-export const SIGNATURE_HEADER = 'X-Signature';
+export const SIGNATURE_HEADER = 'X-HDM-Sig';
 
 /** Verifies the Firebase ID token, then loads roles + profile existence in ONE query. */
 export const requireUser = (deps: Deps) =>
