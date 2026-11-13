@@ -1,0 +1,10 @@
+# landing page & assets (not part of the app repo)
+/index.html
+/images/
+/.remember/
+/.claude/settings.local.json
+.superpowers/
+node_modules/
+.env
+.env.test
+apps-script/.clasprc.json
