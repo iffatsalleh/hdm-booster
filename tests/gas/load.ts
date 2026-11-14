@@ -16,6 +16,9 @@ function makeUtilities() {
       const buf = typeof data === 'string' ? Buffer.from(data, 'utf8') : Buffer.from(data.map((b) => b & 255));
       return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
     },
+    base64Encode(data: number[]): string {
+      return Buffer.from(data.map((b) => b & 255)).toString('base64');
+    },
     base64DecodeWebSafe(s: string): number[] {
       return Array.from(Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64'), (b) => (b > 127 ? b - 256 : b));
     },

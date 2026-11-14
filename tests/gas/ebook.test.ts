@@ -96,11 +96,10 @@ describe('ebookRespond_', () => {
 describe('handleAppApi', () => {
   it('wraps the response with jsonOut using Script Properties + Drive', async () => {
     const t = await signTicket(SECRET, { fileId: 'FILE9', uid: 'u' }, Math.floor(Date.now() / 1000));
-    const bytes = new Array(5 * 1024 * 1024).fill(1);
+    const bytes = new Array(5 * 1024 * 1024);
     const file = {
       getSize: () => bytes.length,
       getLastUpdated: () => new Date('2026-11-02T00:00:00Z'),
-      getBlob: () => ({ getBytes: () => bytes }),
     };
     let asked = '';
     const gg = loadGas(['Hmac.gs.js', 'Config.gs.js', 'Ebook.gs.js'], {
@@ -114,5 +113,42 @@ describe('handleAppApi', () => {
     expect(meta.out).toMatchObject({ ok: true, data: { chunks: 2, bytes: 5 * 1024 * 1024, updatedAt: '2026-11-02T00:00:00.000Z' } });
     expect(asked).toBe('FILE9');
     expect(gg.handleAppApi({ action: 'ebook.meta', ticket: 'x' }, {}).out).toEqual({ ok: false, message: MSG });
+  });
+});
+
+describe('driveRangeRead_', () => {
+  function mk(size: number, code = 206, shortBy = 0) {
+    const reqs: any[] = [];
+    const gg = loadGas(['Hmac.gs.js', 'Ebook.gs.js'], {
+      Date,
+      ScriptApp: { getOAuthToken: () => 'TOK' },
+      UrlFetchApp: {
+        fetch: (url: string, opts: any) => {
+          reqs.push({ url, opts });
+          const m = /bytes=(\d+)-(\d+)/.exec(opts.headers.Range)!;
+          const n = Number(m[2]) - Number(m[1]) + 1 - shortBy;
+          return { getResponseCode: () => code, getContent: () => new Array(n).fill(65) };
+        },
+      },
+    });
+    return { gg, reqs, size };
+  }
+  const size = 10 * 1024 * 1024;
+
+  it('requests first / middle / last ranges with bearer token', () => {
+    const { gg, reqs } = mk(size);
+    const first = gg.driveRangeRead_('F/1', 0, MB4);
+    gg.driveRangeRead_('F/1', MB4, 2 * MB4);
+    const last = gg.driveRangeRead_('F/1', 2 * MB4, size);
+    expect(reqs.map((r) => r.opts.headers.Range)).toEqual([`bytes=0-${MB4 - 1}`, `bytes=${MB4}-${2 * MB4 - 1}`, `bytes=${2 * MB4}-${size - 1}`]);
+    expect(reqs[0].url).toBe('https://www.googleapis.com/drive/v3/files/F%2F1?alt=media');
+    expect(reqs[0].opts.headers.Authorization).toBe('Bearer TOK');
+    expect(Buffer.from(first, 'base64').length).toBe(MB4);
+    expect(Buffer.from(last, 'base64').length).toBe(size - 2 * MB4);
+  });
+  it('accepts 200, rejects other codes and wrong lengths', () => {
+    expect(mk(100, 200).gg.driveRangeRead_('F', 0, 10)).toBe(Buffer.alloc(10, 65).toString('base64'));
+    expect(() => mk(100, 403).gg.driveRangeRead_('F', 0, 10)).toThrow(/HTTP 403/);
+    expect(() => mk(100, 206, 1).gg.driveRangeRead_('F', 0, 10)).toThrow(/length/);
   });
 });

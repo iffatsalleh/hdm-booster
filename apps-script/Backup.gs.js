@@ -3,6 +3,7 @@
 // Script Properties: HIVE_API_BASE, HIVE_DB_ID, HIVE_READ_KEY, DRIVE_BACKUP_FOLDER_ID.
 var BACKUP_PAGE_SIZE = 1000;
 var BACKUP_RETENTION_DAYS = 30;
+var BACKUP_BUDGET_MS = 5 * 60 * 1000; // Apps Script kills executions at 6 min
 var MYT_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 // Fixed list (never user input) with a deterministic ORDER BY for stable pagination.
@@ -78,12 +79,21 @@ function backupFetchTable(table, query) {
   return out;
 }
 
-/** deps: {nowMs, query, writeJson(date, table, rows), listFolderNames(), deleteFolder(name), log(msg)} */
+/** deps: {nowMs, query, writeJson(date, table, rows), listFolderNames(), deleteFolder(name), log(msg), now() clock (default Date.now), budgetMs (default 5 min)}
+ *  Retention runs only when every table succeeded, so a long outage never purges the last good backups. */
 function runBackup_(deps) {
   var date = mytDateString(deps.nowMs);
   var failed = [];
+  var clock = deps.now || Date.now;
+  var budget = deps.budgetMs || BACKUP_BUDGET_MS;
+  var started = clock();
   for (var i = 0; i < BACKUP_TABLES.length; i++) {
     var t = BACKUP_TABLES[i];
+    if (clock() - started > budget) {
+      failed.push({ table: t.name, error: 'timeout' });
+      deps.log('backup ' + t.name + ' skipped: time budget exceeded');
+      continue;
+    }
     try {
       var rows = backupFetchTable(t, deps.query);
       deps.writeJson(date, t.name, rows);
@@ -94,6 +104,10 @@ function runBackup_(deps) {
     }
   }
   var deleted = [];
+  if (failed.length) {
+    deps.log('backup retention skipped: ' + failed.length + ' table(s) failed');
+    return { date: date, failed: failed, deleted: deleted };
+  }
   try {
     var names = deps.listFolderNames();
     for (var j = 0; j < names.length; j++) {

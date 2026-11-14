@@ -90,8 +90,40 @@ describe('runBackup_', () => {
     expect(written).toContain('2026-11-14/items:1');
     expect(written.join()).not.toContain('packages');
     expect(res.failed).toEqual([{ table: 'packages', error: 'Error: boom' }]);
-    expect(deleted).toEqual(['2026-09-01', '2026-10-14']);
+    expect(deleted).toEqual([]); // retention skipped when any table failed
     expect(logs.length).toBeGreaterThan(0);
+  });
+  it('retention runs when every table succeeded', () => {
+    const deleted: string[] = [];
+    const res = g.runBackup_({
+      nowMs: day('2026-11-13T19:00:00Z'),
+      query: () => ({ rows: [] }),
+      writeJson: () => {},
+      listFolderNames: () => ['2026-09-01', '2026-10-14', '2026-10-15', 'misc'],
+      deleteFolder: (n: string) => deleted.push(n),
+      log: () => {},
+    });
+    expect(res.failed).toEqual([]);
+    expect(deleted).toEqual(['2026-09-01', '2026-10-14']);
+  });
+  it('time budget: remaining tables marked timeout, no retention', () => {
+    let t = 0;
+    const deleted: string[] = [];
+    const written: string[] = [];
+    const res = g.runBackup_({
+      nowMs: day('2026-11-13T19:00:00Z'),
+      now: () => t,
+      budgetMs: 5 * 60 * 1000,
+      query: () => ({ rows: [] }),
+      writeJson: (d: string, tb: string) => { written.push(tb); if (written.length === 3) t = 5 * 60 * 1000 + 1; },
+      listFolderNames: () => ['2020-01-01'],
+      deleteFolder: (n: string) => deleted.push(n),
+      log: () => {},
+    });
+    expect(written).toHaveLength(3);
+    expect(res.failed).toHaveLength(16);
+    expect(res.failed.every((f: any) => f.error === 'timeout')).toBe(true);
+    expect(deleted).toEqual([]);
   });
   it('a failing delete or write does not abort the run', () => {
     const res = g.runBackup_({

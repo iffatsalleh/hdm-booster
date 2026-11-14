@@ -3,6 +3,8 @@
 //   POST text/plain  {action:'ebook.chunk', ticket, index}    -> {ok:true, data:{b64}}   (4 MB slice of the file)
 // The ticket (verified with TICKET_SECRET, no Firebase/DB access here) carries the Drive fileId; a fileId in the
 // request body is never read.
+// Each chunk is standard PADDED base64 of its own byte range: the frontend must decode every chunk separately
+// (atob per chunk, then concatenate bytes) and never concatenate the b64 strings.
 var EBOOK_CHUNK_BYTES = 4 * 1024 * 1024;
 var EBOOK_EXPIRED_MSG = 'Sesi ebook tamat. Sila buka semula ebook.';
 
@@ -38,29 +40,30 @@ function ebookRespond_(body, secret, now, store) {
   }
 }
 
-/** Real Drive-backed store. The blob is cached per execution so consecutive calls on one file reuse it. */
-function driveEbookStore_() {
-  var cache = {};
-  function load(fileId) {
-    if (!cache[fileId]) {
-      var file = DriveApp.getFileById(fileId);
-      cache[fileId] = { file: file, bytes: null };
-    }
-    return cache[fileId];
-  }
-  return {
-    stat: function (fileId) {
-      var f = load(fileId).file;
-      return { bytes: f.getSize(), updatedAt: f.getLastUpdated().toISOString() };
-    },
-    readChunk: function (fileId, start, end) {
-      var c = load(fileId);
-      if (!c.bytes) c.bytes = c.file.getBlob().getBytes();
-      return Utilities.base64Encode(c.bytes.slice(start, end));
-    }
-  };
+/** Ranged read of [start, end) via Drive v3 (each chunk is its own execution, so never load the whole file). */
+function driveRangeRead_(fileId, start, end) {
+  var resp = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media', {
+    method: 'get',
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), Range: 'bytes=' + start + '-' + (end - 1) },
+    muteHttpExceptions: true
+  });
+  var code = resp.getResponseCode();
+  if (code !== 206 && code !== 200) throw new Error('drive HTTP ' + code);
+  var content = resp.getContent();
+  if (content.length !== end - start) throw new Error('drive range length ' + content.length + ' != ' + (end - start));
+  return Utilities.base64Encode(content);
 }
 
+/** Real Drive-backed store: cheap metadata via DriveApp, bytes via ranged reads. */
+function driveEbookStore_() {
+  return {
+    stat: function (fileId) {
+      var f = DriveApp.getFileById(fileId);
+      return { bytes: f.getSize(), updatedAt: f.getLastUpdated().toISOString() };
+    },
+    readChunk: driveRangeRead_
+  };
+}
 /** Router hook (ticket-authenticated app API). */
 function handleAppApi(body, e) {
   return jsonOut(ebookRespond_(body, requireProp('TICKET_SECRET'), nowSec(), driveEbookStore_()));
