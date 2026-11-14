@@ -17,5 +17,7 @@ export default {
       },
     },
   },
+  // hdm.css (design/mockups) has its own reset; preflight would override mockup styles.
+  corePlugins: { preflight: false },
   plugins: [],
 };

@@ -4,8 +4,29 @@
     {
       "name": "hdm-booster",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8765", "--bind", "127.0.0.1"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765",
+        "--bind",
+        "127.0.0.1"
+      ],
       "port": 8765
+    },
+    {
+      "name": "hdm-mock",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:mock",
+        "--",
+        "--port",
+        "5174",
+        "--strictPort",
+        "--open",
+        "false"
+      ],
+      "port": 5174
     }
   ]
 }
