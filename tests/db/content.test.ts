@@ -42,12 +42,17 @@ const boot = async (u: string) => (await q('select app_bootstrap($1) as r', [u])
 const groups = async (u: string) => (await q('select my_groups($1) as r', [u]))[0].r as any[];
 
 afterAll(async () => {
-  await q('delete from groups where item_key = $1', [T_GROUP_ITEM]);
-  await q('delete from ebooks where item_key = $1', [T_EBOOK_ITEM]);
-  await q('delete from purchases where order_ref = any($1::text[])', [refs]);
-  await cleanup(uids);
-  if (batchIds.length) await q('delete from batches where id = any($1::uuid[])', [batchIds]);
-  await q('delete from items where key = any($1::text[])', [[T_EBOOK_ITEM, T_GROUP_ITEM]]);
+  // each step isolated so one failure cannot leak the rest (e.g. test items into the catalogue)
+  const step = async (fn: () => Promise<unknown>) => { try { await fn(); } catch (e) { console.error('cleanup step failed:', (e as Error).message); } };
+  const keys = [T_EBOOK_ITEM, T_GROUP_ITEM];
+  await step(() => q('delete from groups where item_key = any($1::text[])', [keys]));
+  await step(() => q('delete from ebooks where item_key = any($1::text[])', [keys]));
+  await step(() => q('delete from purchases where order_ref = any($1::text[])', [refs]));
+  await step(() => cleanup(uids));
+  await step(() => q('delete from manual_grants where item_key = any($1::text[])', [keys]));
+  await step(() => q('delete from package_items where item_key = any($1::text[])', [keys]));
+  await step(() => q('delete from batches where id = any($1::uuid[])', [batchIds]));
+  await step(() => q('delete from items where key = any($1::text[])', [keys]));
   await closeDb();
 });
 

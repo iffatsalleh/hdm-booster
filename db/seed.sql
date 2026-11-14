@@ -20,20 +20,23 @@ insert into packages (id, name, price_rm, sellable) values
   ('upgrade_a_b', 'Naik Taraf A ke B', 50, false)
 on conflict (id) do update set name = excluded.name, price_rm = excluded.price_rm, sellable = excluded.sellable;
 
-insert into package_items (package_id, item_key)
+-- Package contents are explicit (never derived from `items`, so stray rows cannot leak in).
+-- Re-runs self-repair: any package_items row not in these lists is removed.
+create temp table _pkg_items (package_id text, item_key text) on commit drop;
+insert into _pkg_items (package_id, item_key)
 select 'basic', k from unnest(array['sistem','ebook_strategi','tdee','graduation','group_hdm']) k
-on conflict do nothing;
+union all
+select 'complete', k from unnest(array['sistem','ebook_strategi','ebook_muscle_mania','ebook_traditional_remedy',
+  'ebook_tas','ebook_food_swap','ebook_emergency','ebook_supplement','tdee','graduation','group_hdm','group_muscle_mania']) k
+union all
+select 'upgrade_a_b', k from unnest(array['ebook_muscle_mania','ebook_traditional_remedy','ebook_tas','ebook_food_swap',
+  'ebook_emergency','ebook_supplement','group_muscle_mania']) k;
 
-insert into package_items (package_id, item_key)
-select 'complete', key from items
+delete from package_items pi
+where pi.package_id in ('basic','complete','upgrade_a_b')
+  and not exists (select 1 from _pkg_items x where x.package_id = pi.package_id and x.item_key = pi.item_key);
+insert into package_items (package_id, item_key) select package_id, item_key from _pkg_items
 on conflict do nothing;
-
--- upgrade_a_b = the 7 items in complete but not in basic
-insert into package_items (package_id, item_key)
-select 'upgrade_a_b', key from items
-where key not in ('sistem','ebook_strategi','tdee','graduation','group_hdm')
-on conflict do nothing;
-
 insert into batches (name, sales_open_at, sales_close_at, program_start, program_end, phases, status)
 select 'Batch Rejab 1448',
        timestamptz '2026-12-01 00:00+08', timestamptz '2027-01-31 23:59+08',
