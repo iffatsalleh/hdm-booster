@@ -2,6 +2,9 @@ import { Hono } from 'hono';
 import type { AppEnv, Deps } from './types';
 import { fail, ok, MSG } from './errors';
 import { requireInternal, requireRole, requireUser } from './guard';
+import { meRoutes } from './routes/me';
+import { codesRoutes } from './routes/codes';
+import { ebookRoutes } from './routes/ebook';
 
 export function createApp(deps: Deps) {
   const app = new Hono<AppEnv>();
@@ -25,8 +28,16 @@ export function createApp(deps: Deps) {
     if (allowed) c.res.headers.set('Access-Control-Allow-Origin', origin!);
   });
 
-  app.get('/api/me', requireUser(deps), (c) => ok(c, c.get('user')));
-  app.get('/api/admin/ping', requireUser(deps), requireRole('admin'), (c) => ok(c, { pong: true }));
+  // Admin boundary: EVERY /api/admin/* path (existing or not) needs a profile with the superadmin role.
+  // Individual admin routes (Task 8) may add narrower checks but never loosen this one.
+  app.use('/api/admin/*', requireUser(deps), requireRole('superadmin'));
+  app.get('/api/admin/ping', (c) => ok(c, { pong: true }));
+
+  // Participant routes (each route carries requireUser itself).
+  app.route('/api', meRoutes(deps));
+  app.route('/api', codesRoutes(deps));
+  app.route('/api', ebookRoutes(deps));
+
   app.post('/internal/ping', requireInternal(deps), (c) => ok(c, { pong: true }));
 
   app.notFound((c) => fail(c, 404, 'tiada'));

@@ -18,8 +18,9 @@ export const requireUser = (deps: Deps) =>
     }
     if (!who || !who.uid) return fail(c, 401, 'perlu_log_masuk');
 
-    const row = await deps.hive.one<{ roles: string[] | null; has_profile: boolean }>(
-      'select roles_for($1) as roles, exists(select 1 from profiles where id = $1) as has_profile',
+    const row = await deps.hive.json<{ roles: string[] | null; has_profile: boolean }>(
+      `select jsonb_build_object('roles', to_jsonb(roles_for($1)),
+                                 'has_profile', exists(select 1 from profiles where id = $1)) as r`,
       [who.uid],
     );
     if (!row.has_profile) return fail(c, 403, 'tiada_profil');

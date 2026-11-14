@@ -2,6 +2,11 @@ export interface Hive {
   q<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   /** Exactly one row expected; throws otherwise. */
   one<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T>;
+  /**
+   * Worker rule: every Worker query selects exactly ONE row with ONE jsonb column named `r`.
+   * Returns that value, JSON.parse-d when the transport hands jsonb back as a string (REST does).
+   */
+  json<T = unknown>(sql: string, params?: unknown[]): Promise<T>;
 }
 
 /** Firebase Admin operations (implemented in Task 8). */

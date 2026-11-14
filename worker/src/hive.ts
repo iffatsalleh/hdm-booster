@@ -40,5 +40,17 @@ export function createHive({ base, dbId, key }: HiveConfig): Hive {
     return rows[0];
   }
 
-  return { q, one };
+  async function json<T = unknown>(sql: string, params?: unknown[]): Promise<T> {
+    return jsonCell<T>(await one<Record<string, unknown>>(sql, params));
+  }
+
+  return { q, one, json };
+}
+
+/** The single `r` jsonb cell of a row: REST returns jsonb as a JSON string, pg may return an object. */
+export function jsonCell<T = unknown>(row: Record<string, unknown>): T {
+  if (!row || !('r' in row)) throw new Error('hive: expected a column named r');
+  const v = row.r;
+  if (typeof v === 'string') return JSON.parse(v) as T;
+  return v as T;
 }

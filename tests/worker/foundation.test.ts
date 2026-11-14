@@ -1,23 +1,32 @@
 import { describe, test, expect } from 'vitest';
 import { createApp } from '../../worker/src/app';
 import { signHmac } from '../../worker/src/hmac';
+import { jsonCell } from '../../worker/src/hive';
 import type { Deps, Hive, FirebaseAdmin } from '../../worker/src/types';
 
 const NOW = 1_800_000_000;
 
-/** In-memory fake: profiles map uid -> roles. Answers requireUser's single query. */
+/**
+ * In-memory fake: profiles map uid -> roles. Answers requireUser's single jsonb query and app_bootstrap,
+ * returning the `r` cell as a JSON string exactly as HornetHive REST does.
+ */
 function fakeHive(profiles: Record<string, string[]>): Hive {
   const q = async (sql: string, params: unknown[] = []) => {
-    if (/roles_for\(\$1\)/.test(sql)) {
-      const uid = String(params[0]);
-      const has = uid in profiles;
-      return [{ roles: has ? profiles[uid] : [], has_profile: has }] as never[];
+    const uid = String(params[0]);
+    const has = uid in profiles;
+    if (/^select jsonb_build_object\('roles', to_jsonb\(roles_for\(\$1\)\)/.test(sql)) {
+      return [{ r: JSON.stringify({ roles: has ? profiles[uid] : [], has_profile: has }) }] as never[];
+    }
+    if (/^select app_bootstrap\(\$1\) as r$/.test(sql)) {
+      return [{ r: JSON.stringify({ ok: true, profile: { id: uid }, roles: profiles[uid] }) }] as never[];
     }
     throw new Error('unexpected sql: ' + sql);
   };
+  const one = (async (sql: string, params?: unknown[]) => (await q(sql, params))[0]) as Hive['one'];
   return {
     q: q as Hive['q'],
-    one: (async (sql: string, params?: unknown[]) => (await q(sql, params))[0]) as Hive['one'],
+    one,
+    json: (async (sql: string, params?: unknown[]) => jsonCell(await one(sql, params))) as Hive['json'],
   };
 }
 
@@ -59,17 +68,16 @@ describe('foundation', () => {
     });
   });
 
-  test('valid token with profile -> 200 with roles', async () => {
-    const res = await makeApp({ u1: ['member'] }).request('/api/me', { headers: { Authorization: 'Bearer tok:u1' } });
+  test('valid token with profile -> 200 (jsonb string cell parsed)', async () => {
+    const res = await makeApp({ u1: ['coach'] }).request('/api/me', { headers: { Authorization: 'Bearer tok:u1' } });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      ok: true,
-      data: { uid: 'u1', email: 'u1@x.test', roles: ['member'], hasProfile: true },
-    });
+    expect(await res.json()).toEqual({ ok: true, data: { profile: { id: 'u1' }, roles: ['coach'] } });
   });
 
-  test('requireRole: wrong role -> 403 tiada_kebenaran, right role passes', async () => {
-    const app = makeApp({ m: ['member'], a: ['admin'] });
+  test('admin guard: no role / coach -> 403 tiada_kebenaran, superadmin passes', async () => {
+    const app = makeApp({ m: [], c: ['coach'], a: ['superadmin'] });
+    const coach = await app.request('/api/admin/ping', { headers: { Authorization: 'Bearer tok:c' } });
+    expect(coach.status).toBe(403);
     const bad = await app.request('/api/admin/ping', { headers: { Authorization: 'Bearer tok:m' } });
     expect(bad.status).toBe(403);
     expect((await bad.json()).reason).toBe('tiada_kebenaran');

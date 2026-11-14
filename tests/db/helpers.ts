@@ -26,6 +26,7 @@ const USER_TABLES: [string, string][] = [
   ['access_codes', 'redeemed_by'],
   ['reading_progress', 'user_id'],
   ['user_roles', 'user_id'],
+  ['rate_attempts', 'subject'],
   ['profiles', 'id'],
 ];
 
