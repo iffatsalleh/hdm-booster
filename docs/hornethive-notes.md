@@ -48,3 +48,15 @@ If plpgsql or pgcrypto is refused, stop and report (design 3.3 fallback: logic m
 - [ ] usage/quota endpoint exists? :
 - [ ] `/query` row format (objects vs arrays aligned to `columns`) :
 - [ ] rate limit values (429) :
+
+## Data path (decided 14/11/2026, Task 6b)
+- **Primary:** the Worker reaches Postgres through **Cloudflare Hyperdrive** (Free plan: 100,000 queries/day, about 20 origin connections, 15 s initial connect timeout, 10 min idle timeout).
+  - The Hyperdrive origin is the HornetHive **pooled** string (`HIVE_PG_URL`: PgBouncer transaction mode, port 6432, `sslmode=require`).
+  - Create the config with query caching **disabled**: `npx wrangler hyperdrive create hdm-db --connection-string="<HIVE_PG_URL>" --caching-disabled`. Put the printed id in `worker/wrangler.toml` `[[hyperdrive]]`.
+  - The Worker uses `pg` (node-postgres) with `nodejs_compat`. Each request gets its own lazily-connected `Client` (`worker/src/hivePg.ts`), ended with `ctx.waitUntil` after the response.
+  - The `Hive` interface and every route's SQL are unchanged: each query still selects one `jsonb` column `r`.
+  - pg returns `jsonb` as an object, REST as a string. `jsonCell()` handles both.
+- **Fallback:** when no `HYPERDRIVE` binding exists, the Worker uses the REST `/query` client (`worker/src/hive.ts`). That needs `HIVE_DB_ID` and the `HIVE_DML_KEY` secret.
+- **Backup:** Apps Script no longer calls HornetHive. `nightlyBackup` pages through the Worker's HMAC-signed `POST /internal/export {table, offset, limit}`. The Worker holds a fixed table whitelist, each table with its ORDER BY key. No read key is needed.
+- **Risk:** HornetHive's docs say the direct Postgres connection is a Pro-plan feature. Our Free database was nevertheless given a working pooled string (confirmed 13/11/2026). If HornetHive restricts it on Free, the Worker must switch to the REST fallback: remove the `[[hyperdrive]]` block and set `HIVE_DML_KEY`. The backup then also needs a read path (`/internal/export` keeps working, since it uses whatever hive the Worker has). Or upgrade to Pro.
+- **Security:** the database has no row-level security. The Worker is the only security boundary, and the Hyperdrive connection string acts as the database owner. Never expose it to the browser or Apps Script.

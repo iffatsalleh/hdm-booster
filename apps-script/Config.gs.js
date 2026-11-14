@@ -1,7 +1,7 @@
 // Script Properties accessors. Set these in Project Settings > Script properties (never commit values):
 // WORKER_URL, INTERNAL_SECRET, TICKET_SECRET, BCL_API_BASE (https://bcl.my/api), BCL_API_TOKEN, BCL_WEBHOOK_KEY,
 // BCL_FIELD_MAP (JSON of candidate paths per field), BCL_FEE_TOLERANCE (default 3), APP_URL,
-// HIVE_API_BASE, HIVE_DB_ID, HIVE_READ_KEY, DRIVE_BACKUP_FOLDER_ID.
+// DRIVE_BACKUP_FOLDER_ID. (No HornetHive key: the nightly backup reads through the Worker's /internal/export.)
 var SUPPORT_WA = '60134417042';
 
 function prop(name, fallback) {

@@ -34,16 +34,25 @@ export function createHive({ base, dbId, key }: HiveConfig): Hive {
     return rows as T[];
   }
 
+  return hiveFromQuery(q);
+}
+
+/**
+ * Builds the Hive interface (q/one/json) from a raw row query. Shared by the REST client, the Hyperdrive
+ * Postgres client (hivePg.ts) and the test adapter (tests/worker/pgHive.ts), so `one`/`json` behave the same.
+ */
+export function hiveFromQuery(query: (sql: string, params: unknown[]) => Promise<unknown[]>): Hive {
+  async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
+    return (await query(sql, params)) as T[];
+  }
   async function one<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T> {
     const rows = await q<T>(sql, params);
     if (rows.length !== 1) throw new Error(`hive: expected 1 row, got ${rows.length}`);
     return rows[0];
   }
-
   async function json<T = unknown>(sql: string, params?: unknown[]): Promise<T> {
     return jsonCell<T>(await one<Record<string, unknown>>(sql, params));
   }
-
   return { q, one, json };
 }
 

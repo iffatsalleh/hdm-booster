@@ -24,48 +24,60 @@ describe('MYT date + retention', () => {
   });
 });
 
-describe('table list and SQL', () => {
-  it('has the 19 tables with the fixed query shape', () => {
-    const names = g.BACKUP_TABLES.map((t: any) => t.name);
-    expect(names).toHaveLength(19);
-    expect(names).toContain('schema_migrations');
-    expect(g.backupSql({ name: 'items', order: 'key' })).toBe('select to_jsonb(t) as r from items t order by key limit $1 offset $2');
+/** Fake Worker /internal/export: `tables` maps name -> row count (rows are {i}); records every call. */
+function fakeWorker(tables: Record<string, number> = {}, opts: { fail?: Record<string, any> } = {}) {
+  const calls: any[] = [];
+  const workerCall = (method: string, path: string, body: any) => {
+    calls.push([method, path, body]);
+    if (opts.fail && body.table in opts.fail) {
+      const f = opts.fail[body.table];
+      if (f instanceof Error) throw f;
+      return f;
+    }
+    const total = tables[body.table] ?? 0;
+    const rows = [];
+    for (let i = body.offset; i < Math.min(total, body.offset + body.limit); i++) rows.push({ i });
+    return { ok: true, data: { rows, next: rows.length < body.limit ? null : body.offset + rows.length } };
+  };
+  return { calls, workerCall };
+}
+
+describe('table list', () => {
+  it('has the 19 tables (order keys live in the Worker whitelist)', () => {
+    expect(g.BACKUP_TABLES).toHaveLength(19);
+    expect(g.BACKUP_TABLES).toContain('schema_migrations');
+    expect(g.BACKUP_TABLES).toContain('reading_progress');
+    expect(new Set(g.BACKUP_TABLES).size).toBe(19);
   });
 });
 
-describe('parseBackupRow', () => {
-  it('handles object rows, array rows and JSON strings', () => {
-    expect(g.parseBackupRow({ r: { a: 1 } }, ['r'])).toEqual({ a: 1 });
-    expect(g.parseBackupRow({ r: '{"a":1}' }, ['r'])).toEqual({ a: 1 });
-    expect(g.parseBackupRow(['{"a":2}'], ['r'])).toEqual({ a: 2 });
-    expect(g.parseBackupRow([{ a: 3 }], ['r'])).toEqual({ a: 3 });
-  });
-});
-
-describe('backupFetchTable pagination', () => {
-  it('pages until a short page, passing limit/offset', () => {
-    const total = 2500;
-    const calls: any[] = [];
-    const query = (sql: string, params: number[]) => {
-      calls.push(params);
-      const rows = [];
-      for (let i = params[1]; i < Math.min(total, params[1] + params[0]); i++) rows.push({ r: { i } });
-      return { columns: ['r'], rows };
-    };
-    const out = g.backupFetchTable({ name: 'audit_logs', order: 'id' }, query);
+describe('backupFetchTable pagination (Worker /internal/export)', () => {
+  it('pages with POST {table, offset, limit:1000} until next is null', () => {
+    const w = fakeWorker({ audit_logs: 2500 });
+    const out = g.backupFetchTable('audit_logs', w.workerCall);
     expect(out).toHaveLength(2500);
     expect(out[2499]).toEqual({ i: 2499 });
-    expect(calls).toEqual([[1000, 0], [1000, 1000], [1000, 2000]]);
+    expect(w.calls).toEqual([
+      ['POST', '/internal/export', { table: 'audit_logs', offset: 0, limit: 1000 }],
+      ['POST', '/internal/export', { table: 'audit_logs', offset: 1000, limit: 1000 }],
+      ['POST', '/internal/export', { table: 'audit_logs', offset: 2000, limit: 1000 }],
+    ]);
   });
-  it('exact multiple of page size takes one extra empty query; empty table yields []', () => {
-    const calls: any[] = [];
-    const query = (sql: string, p: number[]) => {
-      calls.push(p);
-      return { rows: p[1] < 1000 ? Array.from({ length: 1000 }, () => ({ r: {} })) : [] };
-    };
-    expect(g.backupFetchTable({ name: 't', order: 'id' }, query)).toHaveLength(1000);
-    expect(calls).toHaveLength(2);
-    expect(g.backupFetchTable({ name: 't', order: 'id' }, () => ({ rows: [] }))).toEqual([]);
+  it('exact multiple of page size takes one extra empty page; empty table yields []', () => {
+    const w = fakeWorker({ t: 1000 });
+    expect(g.backupFetchTable('t', w.workerCall)).toHaveLength(1000);
+    expect(w.calls).toHaveLength(2);
+    expect(g.backupFetchTable('empty', fakeWorker().workerCall)).toEqual([]);
+  });
+  it('a Worker error response throws with the reason only (no body data)', () => {
+    const w = fakeWorker({}, { fail: { items: { ok: false, reason: 'tiada_jadual', message: 'Jadual tidak dikenali.' } } });
+    expect(() => g.backupFetchTable('items', w.workerCall)).toThrow(/export items failed: tiada_jadual/);
+    const bad = fakeWorker({}, { fail: { items: { ok: true, data: { rows: 'x' } } } });
+    expect(() => g.backupFetchTable('items', bad.workerCall)).toThrow(/bad_response/);
+  });
+  it('a non-advancing next aborts instead of looping forever', () => {
+    const loop = () => ({ ok: true, data: { rows: Array.from({ length: 1000 }, () => ({})), next: 0 } });
+    expect(() => g.backupFetchTable('items', loop)).toThrow(/bad_response/);
   });
 });
 
@@ -76,9 +88,9 @@ describe('runBackup_', () => {
     const logs: string[] = [];
     const res = g.runBackup_({
       nowMs: day('2026-11-13T19:00:00Z'),
-      query: (sql: string) => {
-        if (sql.includes(' from packages ')) throw new Error('boom');
-        return { columns: ['r'], rows: [{ r: { ok: 1 } }] };
+      workerCall: (m: string, p: string, body: any) => {
+        if (body.table === 'packages') throw new Error('boom');
+        return { ok: true, data: { rows: [{ ok: 1 }], next: null } };
       },
       writeJson: (date: string, table: string, rows: any[]) => written.push(date + '/' + table + ':' + rows.length),
       listFolderNames: () => ['2026-09-01', '2026-10-14', '2026-10-15', '2026-11-13', 'misc'],
@@ -97,7 +109,7 @@ describe('runBackup_', () => {
     const deleted: string[] = [];
     const res = g.runBackup_({
       nowMs: day('2026-11-13T19:00:00Z'),
-      query: () => ({ rows: [] }),
+      workerCall: fakeWorker().workerCall,
       writeJson: () => {},
       listFolderNames: () => ['2026-09-01', '2026-10-14', '2026-10-15', 'misc'],
       deleteFolder: (n: string) => deleted.push(n),
@@ -114,7 +126,7 @@ describe('runBackup_', () => {
       nowMs: day('2026-11-13T19:00:00Z'),
       now: () => t,
       budgetMs: 5 * 60 * 1000,
-      query: () => ({ rows: [] }),
+      workerCall: fakeWorker().workerCall,
       writeJson: (d: string, tb: string) => { written.push(tb); if (written.length === 3) t = 5 * 60 * 1000 + 1; },
       listFolderNames: () => ['2020-01-01'],
       deleteFolder: (n: string) => deleted.push(n),
@@ -128,7 +140,7 @@ describe('runBackup_', () => {
   it('a failing delete or write does not abort the run', () => {
     const res = g.runBackup_({
       nowMs: day('2026-11-13T19:00:00Z'),
-      query: () => ({ rows: [] }),
+      workerCall: fakeWorker().workerCall,
       writeJson: (d: string, t: string) => { if (t === 'items') throw new Error('drive full'); },
       listFolderNames: () => ['2020-01-01'],
       deleteFolder: () => { throw new Error('nope'); },

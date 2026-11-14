@@ -27,6 +27,7 @@ describe('signature', () => {
   test.each([
     ['GET', '/internal/bcl-config'],
     ['POST', '/internal/known-orders'],
+    ['POST', '/internal/export'],
     ['POST', '/internal/purchase'],
     ['POST', '/internal/bcl-log'],
     ['GET', '/internal/email-queue'],
@@ -175,5 +176,67 @@ describe('body limit', () => {
   test('internal body over 256 KB -> 413', async () => {
     const res = await icall('POST', '/internal/bcl-log', { order_ref: 'x', kind: 'error', detail: 'a'.repeat(257 * 1024) });
     expect(res.status).toBe(413);
+  });
+});
+
+describe('export (nightly backup, read-only)', () => {
+  test('unsigned / wrong signature -> 401', async () => {
+    const body = { table: 'items', offset: 0, limit: 10 };
+    expect((await app.request('/internal/export', { method: 'POST', body: JSON.stringify(body) })).status).toBe(401);
+    expect((await icall('POST', '/internal/export', body, { secret: 'wrong' })).status).toBe(401);
+  });
+
+  test('unknown table / injection attempts -> 400 tiada_jadual', async () => {
+    for (const table of ['nope', 'items; drop table items', 'pg_shadow', 'ITEMS', '', 42, null]) {
+      const res = await icall('POST', '/internal/export', { table, offset: 0, limit: 10 });
+      expect(res.status, String(table)).toBe(400);
+      expect((await res.json()).reason).toBe('tiada_jadual');
+    }
+  });
+
+  test('bad offset / limit -> 400 data_tidak_sah', async () => {
+    for (const [offset, limit] of [[-1, 10], [0, 0], [0, 1001], [1.5, 10], [0, '10'], ['0', 10]] as const) {
+      const res = await icall('POST', '/internal/export', { table: 'items', offset, limit });
+      expect(res.status, `${offset}/${limit}`).toBe(400);
+      expect((await res.json()).reason).toBe('data_tidak_sah');
+    }
+    expect((await icall('POST', '/internal/export', [])).status).toBe(400);
+  });
+
+  test('pages items in key order; next = offset + rows or null on a short page; default limit 1000', async () => {
+    const all = await q<{ key: string }>('select key from items order by key');
+    expect(all.length).toBeGreaterThan(3);
+    const p1 = await (await icall('POST', '/internal/export', { table: 'items', offset: 0, limit: 2 })).json();
+    expect(p1.ok).toBe(true);
+    expect(p1.data.rows.map((r: any) => r.key)).toEqual(all.slice(0, 2).map((r) => r.key));
+    expect(p1.data.next).toBe(2);
+    const p2 = await (await icall('POST', '/internal/export', { table: 'items', offset: 2, limit: 2 })).json();
+    expect(p2.data.rows.map((r: any) => r.key)).toEqual(all.slice(2, 4).map((r) => r.key));
+    const whole = await (await icall('POST', '/internal/export', { table: 'items' })).json();
+    expect(whole.data.rows).toHaveLength(all.length);
+    expect(whole.data.next).toBeNull();
+    const past = await (await icall('POST', '/internal/export', { table: 'items', offset: 100000, limit: 5 })).json();
+    expect(past.data).toEqual({ rows: [], next: null });
+  });
+
+  test('rows are full objects (to_jsonb) and composite-key tables export', async () => {
+    const pi = await (await icall('POST', '/internal/export', { table: 'package_items', offset: 0, limit: 1000 })).json();
+    expect(pi.ok).toBe(true);
+    expect(pi.data.rows[0]).toHaveProperty('package_id');
+    expect(pi.data.rows[0]).toHaveProperty('item_key');
+    const mig = await (await icall('POST', '/internal/export', { table: 'schema_migrations', offset: 0, limit: 1 })).json();
+    expect(mig.data.rows[0]).toHaveProperty('name');
+  });
+
+  test('every whitelisted table exports (first row only)', async () => {
+    const tables = ['items', 'packages', 'package_items', 'batches', 'profiles', 'user_roles', 'audit_logs', 'app_settings',
+      'manual_grants', 'purchases', 'bcl_form_map', 'bcl_webhook_log', 'email_queue', 'rate_attempts', 'access_codes',
+      'ebooks', 'reading_progress', 'groups', 'schema_migrations'];
+    for (const table of tables) {
+      const res = await icall('POST', '/internal/export', { table, offset: 0, limit: 1 });
+      expect(res.status, table).toBe(200);
+      const b = await res.json();
+      expect(Array.isArray(b.data.rows), table).toBe(true);
+    }
   });
 });

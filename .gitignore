@@ -11,3 +11,4 @@ apps-script/.clasprc.json
 .env.prod
 
 .superdesign/tmp/
+worker/.dryrun/

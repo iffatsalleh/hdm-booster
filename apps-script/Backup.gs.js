@@ -1,32 +1,16 @@
-// Nightly backup (03:00 MYT trigger): every table via the HornetHive REST API with the read key, as JSON files in
-// DRIVE_BACKUP_FOLDER_ID/YYYY-MM-DD/<table>.json. Dated folders older than 30 days are deleted.
-// Script Properties: HIVE_API_BASE, HIVE_DB_ID, HIVE_READ_KEY, DRIVE_BACKUP_FOLDER_ID.
+// Nightly backup (03:00 MYT trigger): every table, paged through the Worker's HMAC-signed POST /internal/export
+// (no HornetHive key here), as JSON files in DRIVE_BACKUP_FOLDER_ID/YYYY-MM-DD/<table>.json.
+// Dated folders older than 30 days are deleted. Script Properties: WORKER_URL, INTERNAL_SECRET, DRIVE_BACKUP_FOLDER_ID.
 var BACKUP_PAGE_SIZE = 1000;
 var BACKUP_RETENTION_DAYS = 30;
 var BACKUP_BUDGET_MS = 5 * 60 * 1000; // Apps Script kills executions at 6 min
 var MYT_OFFSET_MS = 8 * 60 * 60 * 1000;
 
-// Fixed list (never user input) with a deterministic ORDER BY for stable pagination.
+// Fixed list. The Worker holds the same whitelist with each table's ORDER BY key (worker/src/routes/internal.ts).
 var BACKUP_TABLES = [
-  { name: 'items', order: 'key' },
-  { name: 'packages', order: 'id' },
-  { name: 'package_items', order: 'package_id, item_key' },
-  { name: 'batches', order: 'id' },
-  { name: 'profiles', order: 'id' },
-  { name: 'user_roles', order: 'user_id, role' },
-  { name: 'audit_logs', order: 'id' },
-  { name: 'app_settings', order: 'key' },
-  { name: 'manual_grants', order: 'id' },
-  { name: 'purchases', order: 'id' },
-  { name: 'bcl_form_map', order: 'id' },
-  { name: 'bcl_webhook_log', order: 'id' },
-  { name: 'email_queue', order: 'id' },
-  { name: 'rate_attempts', order: 'id' },
-  { name: 'access_codes', order: 'id' },
-  { name: 'ebooks', order: 'id' },
-  { name: 'reading_progress', order: 'user_id, ebook_id' },
-  { name: 'groups', order: 'id' },
-  { name: 'schema_migrations', order: 'name' }
+  'items', 'packages', 'package_items', 'batches', 'profiles', 'user_roles', 'audit_logs', 'app_settings',
+  'manual_grants', 'purchases', 'bcl_form_map', 'bcl_webhook_log', 'email_queue', 'rate_attempts', 'access_codes',
+  'ebooks', 'reading_progress', 'groups', 'schema_migrations'
 ];
 
 function _pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -49,37 +33,26 @@ function isBackupFolderExpired(name, nowMs, days) {
   return /^\d{4}-\d{2}-\d{2}$/.test(name) && name < backupCutoffDate(nowMs, days);
 }
 
-function backupSql(table) {
-  return 'select to_jsonb(t) as r from ' + table.name + ' t order by ' + table.order + ' limit $1 offset $2';
-}
-
-/** Rows may arrive as objects {r: ...} or arrays aligned to columns; r may be a JSON string. */
-function parseBackupRow(row, columns) {
-  var v;
-  if (Array.isArray(row)) {
-    var i = columns && columns.indexOf('r') >= 0 ? columns.indexOf('r') : 0;
-    v = row[i];
-  } else {
-    v = row.r;
-  }
-  return typeof v === 'string' ? JSON.parse(v) : v;
-}
-
-/** query(sql, params) -> {columns, rows}. Returns all rows of the table as parsed objects. */
-function backupFetchTable(table, query) {
+/** workerCall(method, path, body) -> {ok, data:{rows, next}} | {ok:false, reason}. Returns every row of the table.
+ *  Errors carry the reason only, never response bodies (row data must not reach the failure email). */
+function backupFetchTable(table, workerCall) {
   var out = [];
   var offset = 0;
   while (true) {
-    var res = query(backupSql(table), [BACKUP_PAGE_SIZE, offset]);
-    var rows = (res && res.rows) || [];
-    for (var i = 0; i < rows.length; i++) out.push(parseBackupRow(rows[i], res.columns));
-    if (rows.length < BACKUP_PAGE_SIZE) break;
-    offset += BACKUP_PAGE_SIZE;
+    var res = workerCall('POST', '/internal/export', { table: table, offset: offset, limit: BACKUP_PAGE_SIZE });
+    if (!res || res.ok !== true) throw new Error('export ' + table + ' failed: ' + String((res && res.reason) || 'no_response'));
+    var data = res.data || {};
+    var rows = data.rows;
+    if (!Array.isArray(rows)) throw new Error('export ' + table + ' failed: bad_response');
+    for (var i = 0; i < rows.length; i++) out.push(rows[i]);
+    if (data.next === null || data.next === undefined) break;
+    if (typeof data.next !== 'number' || data.next <= offset) throw new Error('export ' + table + ' failed: bad_response');
+    offset = data.next;
   }
   return out;
 }
 
-/** deps: {nowMs, query, writeJson(date, table, rows), listFolderNames(), deleteFolder(name), log(msg), now() clock (default Date.now), budgetMs (default 5 min)}
+/** deps: {nowMs, workerCall, writeJson(date, table, rows), listFolderNames(), deleteFolder(name), log(msg), now() clock (default Date.now), budgetMs (default 5 min)}
  *  Retention runs only when every table succeeded, so a long outage never purges the last good backups. */
 function runBackup_(deps) {
   var date = mytDateString(deps.nowMs);
@@ -90,17 +63,17 @@ function runBackup_(deps) {
   for (var i = 0; i < BACKUP_TABLES.length; i++) {
     var t = BACKUP_TABLES[i];
     if (clock() - started > budget) {
-      failed.push({ table: t.name, error: 'timeout' });
-      deps.log('backup ' + t.name + ' skipped: time budget exceeded');
+      failed.push({ table: t, error: 'timeout' });
+      deps.log('backup ' + t + ' skipped: time budget exceeded');
       continue;
     }
     try {
-      var rows = backupFetchTable(t, deps.query);
-      deps.writeJson(date, t.name, rows);
-      deps.log('backup ' + t.name + ': ' + rows.length + ' rows');
+      var rows = backupFetchTable(t, deps.workerCall);
+      deps.writeJson(date, t, rows);
+      deps.log('backup ' + t + ': ' + rows.length + ' rows');
     } catch (err) {
-      failed.push({ table: t.name, error: String(err).slice(0, 300) });
-      deps.log('backup ' + t.name + ' FAILED: ' + err);
+      failed.push({ table: t, error: String(err).slice(0, 300) });
+      deps.log('backup ' + t + ' FAILED: ' + err);
     }
   }
   var deleted = [];
@@ -132,21 +105,6 @@ function backupFailureBody(date, failed) {
   return lines.join('\n');
 }
 
-function _hiveQuery_(sql, params) {
-  var base = requireProp('HIVE_API_BASE').replace(/\/+$/, '');
-  var url = base + '/rest/' + encodeURIComponent(requireProp('HIVE_DB_ID')) + '/query';
-  var resp = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + requireProp('HIVE_READ_KEY') },
-    payload: JSON.stringify({ query: sql, params: params }),
-    muteHttpExceptions: true
-  });
-  var code = resp.getResponseCode();
-  if (code !== 200) throw new Error('hive HTTP ' + code); // never include the body/key in errors
-  return JSON.parse(resp.getContentText());
-}
-
 function _childFolder_(parent, name) {
   var it = parent.getFoldersByName(name);
   return it.hasNext() ? it.next() : parent.createFolder(name);
@@ -157,7 +115,7 @@ function nightlyBackup() {
   var root = DriveApp.getFolderById(requireProp('DRIVE_BACKUP_FOLDER_ID'));
   var res = runBackup_({
     nowMs: Date.now(),
-    query: _hiveQuery_,
+    workerCall: workerCall,
     writeJson: function (date, table, rows) {
       var folder = _childFolder_(root, date);
       var fname = table + '.json';

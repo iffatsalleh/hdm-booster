@@ -5,7 +5,7 @@
 import pg from 'pg';
 // @ts-expect-error plain .mjs helper without types
 import { loadEnv } from '../../scripts/hive.mjs';
-import { jsonCell } from '../../worker/src/hive';
+import { hiveFromQuery } from '../../worker/src/hive';
 import type { Hive } from '../../worker/src/types';
 
 const env = loadEnv('prod') as Record<string, string>;
@@ -40,21 +40,9 @@ export async function withConnectRetry<T>(fn: () => Promise<T>, attempts = 3): P
   }
 }
 
-async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
-  return withConnectRetry(async () => (await hivePool.query(sql, params as any[])).rows as T[]);
-}
-
-async function one<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T> {
-  const rows = await q<T>(sql, params);
-  if (rows.length !== 1) throw new Error(`hive: expected 1 row, got ${rows.length}`);
-  return rows[0];
-}
-
-async function json<T = unknown>(sql: string, params?: unknown[]): Promise<T> {
-  return jsonCell<T>(await one<Record<string, unknown>>(sql, params));
-}
-
-export const pgHive: Hive = { q, one, json };
+/** Same q/one/json (row -> `r` cell) logic as the Worker's clients, over this retrying pool. */
+export const pgHive: Hive = hiveFromQuery(async (sql, params) =>
+  withConnectRetry(async () => (await hivePool.query(sql, params as any[])).rows));
 
 export async function closeHive(): Promise<void> {
   await hivePool.end();

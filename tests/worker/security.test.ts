@@ -56,6 +56,17 @@ const ADMIN_ROUTE_LIST: AdminRoute[] = [
   { method: 'DELETE', pattern: '/api/admin/content/:table/:id' },
   { method: 'GET', pattern: '/api/admin/audit' },
 ];
+/** EVERY /internal/* route (HMAC-signed, Apps Script only). */
+const INTERNAL_ROUTES = [
+  'POST /internal/ping',
+  'GET /internal/bcl-config',
+  'POST /internal/known-orders',
+  'POST /internal/purchase',
+  'POST /internal/bcl-log',
+  'GET /internal/email-queue',
+  'POST /internal/email-queue/:id',
+  'POST /internal/export',
+];
 /** Public /api routes (no token). */
 const PUBLIC_ROUTES = ['POST /api/register'];
 
@@ -247,7 +258,7 @@ describe('route inventory', () => {
 
   test('every /internal/ route rejects an unsigned request with 401', async () => {
     const routes = actual('/internal/');
-    expect(routes.length).toBeGreaterThan(5);
+    expect(routes, 'INTERNAL_ROUTES out of date').toEqual([...INTERNAL_ROUTES].sort());
     for (const r of routes) {
       const [m, p] = r.split(' ');
       const res = await app.request(p.replace(':id', PLACEHOLDER_EBOOK), { method: m, body: m === 'GET' ? undefined : '{}' });

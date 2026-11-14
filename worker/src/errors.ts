@@ -36,6 +36,7 @@ export const MSG = {
   geran_sudah_ditarik: 'Akses manual ini sudah ditarik balik.',
   bilangan_tidak_sah: 'Bilangan kod mesti antara 1 dan 500.',
   gagal_jana_kod: 'Gagal menjana kod. Sila cuba lagi.',
+  tiada_jadual: 'Jadual tidak dikenali.',
   gas_gagal: 'Apps Script tidak dapat dihubungi. Sila cuba lagi sebentar lagi.',
 } as const;
 

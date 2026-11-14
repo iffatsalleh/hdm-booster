@@ -8,6 +8,33 @@ import { requireInternal } from '../guard';
 const MAX_REFS = 500;
 const REF_MAX = 200;
 
+/**
+ * Tables Apps Script's nightly backup may export, each with a deterministic ORDER BY for stable paging.
+ * Identifiers in the export SQL come ONLY from this map (never from the request).
+ */
+export const EXPORT_TABLES: Readonly<Record<string, string>> = Object.freeze({
+  items: 'key',
+  packages: 'id',
+  package_items: 'package_id, item_key',
+  batches: 'id',
+  profiles: 'id',
+  user_roles: 'user_id, role',
+  audit_logs: 'id',
+  app_settings: 'key',
+  manual_grants: 'id',
+  purchases: 'id',
+  bcl_form_map: 'id',
+  bcl_webhook_log: 'id',
+  email_queue: 'id',
+  rate_attempts: 'id',
+  access_codes: 'id',
+  ebooks: 'id',
+  reading_progress: 'user_id, ebook_id',
+  groups: 'id',
+  schema_migrations: 'name',
+});
+const EXPORT_MAX = 1000;
+
 const isoOrNull = (v: unknown): string | null => {
   if (typeof v !== 'string' || !v.trim()) return null;
   const ms = Date.parse(v);
@@ -122,6 +149,27 @@ export function internalRoutes(deps: Deps) {
       [id, status, error],
     );
     return res.updated ? ok(c, {}) : fail(c, 404, 'tiada');
+  });
+
+  /** Backup.gs.js nightly backup: {table, offset = 0, limit = 1000} -> {rows (to_jsonb, key order), next | null}. */
+  r.post('/export', async (c) => {
+    const b = await readBody(c);
+    if (!b) return fail(c, 400, 'data_tidak_sah');
+    const table = typeof b.table === 'string' && Object.hasOwn(EXPORT_TABLES, b.table) ? b.table : null;
+    if (!table) return fail(c, 400, 'tiada_jadual');
+    const offset = b.offset === undefined ? 0 : b.offset;
+    const limit = b.limit === undefined ? EXPORT_MAX : b.limit;
+    if (!Number.isSafeInteger(offset) || (offset as number) < 0
+      || !Number.isSafeInteger(limit) || (limit as number) < 1 || (limit as number) > EXPORT_MAX) {
+      return fail(c, 400, 'data_tidak_sah');
+    }
+    const order = EXPORT_TABLES[table];
+    const rows = await deps.hive.json<unknown[]>(
+      `select coalesce(jsonb_agg(to_jsonb(t) order by ${order}), '[]'::jsonb) as r
+         from (select * from ${table} order by ${order} limit $1::int offset $2::bigint) t`,
+      [limit, offset],
+    );
+    return ok(c, { rows, next: rows.length < (limit as number) ? null : (offset as number) + rows.length });
   });
 
   return r;

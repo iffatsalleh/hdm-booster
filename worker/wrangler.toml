@@ -1,11 +1,23 @@
 name = "hdm-api"
 main = "src/index.ts"
-compatibility_date = "2025-01-01"
+# nodejs_compat + compatibility_date >= 2025-02-04: required by `pg` (node-postgres) over Hyperdrive.
+compatibility_date = "2025-02-04"
+compatibility_flags = ["nodejs_compat"]
 
 # Secrets (set with `wrangler secret put <NAME>`):
-#   HIVE_DML_KEY, INTERNAL_SECRET, TICKET_SECRET, FIREBASE_SA_JSON
+#   INTERNAL_SECRET, TICKET_SECRET, FIREBASE_SA_JSON
+#   HIVE_DML_KEY: only for the HornetHive REST fallback (used when no HYPERDRIVE binding is configured)
+
+# Database: Cloudflare Hyperdrive in front of the HornetHive POOLED connection string
+# (PgBouncer transaction mode, port 6432, sslmode=require). Create it with query caching DISABLED:
+#   npx wrangler hyperdrive create hdm-db --connection-string="<HIVE_PG_URL>" --caching-disabled
+# then put the printed id below. Remove this block to fall back to the REST API (needs HIVE_DML_KEY).
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "REPLACE_WITH_HYPERDRIVE_ID"
 
 [vars]
+# REST fallback only (ignored while HYPERDRIVE is bound).
 HIVE_API_BASE = "https://api.hornethive.io/v1"
 HIVE_DB_ID = "REPLACE_WITH_DB_ID"
 FIREBASE_PROJECT_ID = "REPLACE_WITH_FIREBASE_PROJECT_ID"
