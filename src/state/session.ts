@@ -182,6 +182,11 @@ export async function resetPassword(email: string) {
   await p.resetPassword(email.trim().toLowerCase());
 }
 
+export async function changePassword(current: string, next: string) {
+  const p = await authPort();
+  await p.changePassword(current, next);
+}
+
 export function useSession(): SessionState {
   const [s, setS] = useState(state);
   useEffect(() => {

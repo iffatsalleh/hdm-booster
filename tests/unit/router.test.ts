@@ -86,3 +86,24 @@ describe('guard', () => {
     expect(g('#/', { status: 'error', onboarded: false, roles: [] })).toBeNull();
   });
 });
+
+describe('#/aktif (code activation link)', () => {
+  it('query string is parsed separately from params', () => {
+    const r = parseHash('#/masuk?next=aktif');
+    expect(r.name).toBe('masuk');
+    expect(r.params).toEqual({});
+    expect(r.query).toEqual({ next: 'aktif' });
+  });
+  it('anon -> #/masuk?next=aktif', () => {
+    expect(g('#/aktif', anon)).toBe('#/masuk?next=aktif');
+    expect(g('#/masuk?next=aktif', anon)).toBeNull();
+  });
+  it('signed-in member on #/masuk?next=aktif -> #/aktif', () => {
+    expect(g('#/masuk?next=aktif', member)).toBe('#/aktif');
+    expect(g('#/masuk?next=zzz', member)).toBe('#/');
+    expect(g('#/aktif', member)).toBeNull();
+  });
+  it('not onboarded -> onboarding first', () => {
+    expect(g('#/aktif', fresh)).toBe('#/onboarding');
+  });
+});

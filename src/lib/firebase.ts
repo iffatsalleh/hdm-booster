@@ -10,6 +10,9 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut as fbSignOut,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
   type Auth,
 } from 'firebase/auth';
 import { config } from './config';
@@ -21,6 +24,8 @@ export interface AuthPort {
   signIn(email: string, password: string): Promise<void>;
   resetPassword(email: string): Promise<void>;
   signOut(): Promise<void>;
+  /** Re-authenticates with the current password, then sets the new one. Throws Firebase errors (with .code). */
+  changePassword(current: string, next: string): Promise<void>;
   /** null when signed out. force=true refreshes the token from Firebase. */
   getIdToken(force?: boolean): Promise<string | null>;
 }
@@ -36,6 +41,12 @@ function firebasePort(): AuthPort {
     },
     resetPassword: (email) => sendPasswordResetEmail(auth, email),
     signOut: () => fbSignOut(auth),
+    changePassword: async (current, next) => {
+      const u = auth.currentUser;
+      if (!u || !u.email) throw Object.assign(new Error('auth/user-token-expired'), { code: 'auth/user-token-expired' });
+      await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, current));
+      await updatePassword(u, next);
+    },
     getIdToken: async (force) => (auth.currentUser ? auth.currentUser.getIdToken(!!force) : null),
   };
 }

@@ -32,6 +32,14 @@ export const mockAuth: AuthPort = {
     db.setUid(null);
     emit();
   },
+  async changePassword(current, next) {
+    await delay();
+    const a = db.current();
+    if (!a) throw authError('auth/user-token-expired');
+    if (a.password !== current) throw authError('auth/invalid-credential');
+    if (next.length < 6) throw authError('auth/weak-password');
+    db.update(a.uid, { password: next });
+  },
   async getIdToken() {
     const a = db.current();
     return a ? `mock-token-${a.uid}` : null;

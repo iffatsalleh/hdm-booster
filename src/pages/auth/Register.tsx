@@ -105,7 +105,7 @@ export function Register() {
           <Button type="submit" block pulse loading={busy} style="margin-top:18px">Daftar</Button>
         </form>
         <p class="linkrow" style="margin-top:16px">Sudah ada akaun? <a href="#/masuk">Log masuk</a></p>
-        <p class="linkrow" style="margin-top:8px">Ada kod akses? <a href="#/masuk">Log masuk dahulu</a></p>
+        <p class="linkrow" style="margin-top:8px">Ada kod akses? <a href="#/aktif">Log masuk dahulu</a></p>
         <HealthNote />
       </main>
     </div>

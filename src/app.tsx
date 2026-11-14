@@ -11,6 +11,12 @@ import { Home } from './pages/Home';
 import { Help } from './pages/Help';
 import { Rekod } from './pages/Rekod';
 import { NotFound, Placeholder } from './pages/Placeholder';
+import { Onboarding } from './pages/Onboarding';
+import { Tdee } from './pages/Tdee';
+import { Groups } from './pages/Groups';
+import { Account } from './pages/account/Account';
+import { Codes } from './pages/account/Codes';
+import { Aktif } from './pages/Aktif';
 
 function Loading() {
   return (
@@ -39,13 +45,19 @@ function SessionError({ s }: { s: SessionState }) {
 
 function Page({ route }: { route: Route }) {
   switch (route.name) {
-    case 'masuk': return <Login />;
+    case 'masuk': return <Login next={route.query?.next} />;
     case 'daftar': return <Register />;
     case 'lupa': return <Forgot />;
     case 'home': return <Home />;
     case 'bantuan': return <Help />;
     case 'rekod':
     case 'cabaran': return <Rekod route={route.name} />;
+    case 'onboarding': return <Onboarding />;
+    case 'tdee': return <Tdee />;
+    case 'group': return <Groups />;
+    case 'akaun': return <Account />;
+    case 'akaun_kod': return <Codes />;
+    case 'aktif': return <Aktif />;
     case 'tiada': return <NotFound />;
     default: return <Placeholder route={route.name} />;
   }

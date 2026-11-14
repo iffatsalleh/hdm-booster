@@ -5,7 +5,7 @@ export type RouteName =
   | 'home' | 'masuk' | 'daftar' | 'lupa' | 'onboarding' | 'ebook' | 'ebook_read' | 'tdee' | 'group'
   | 'akaun' | 'akaun_kod' | 'aktif' | 'bantuan' | 'rekod' | 'cabaran' | 'admin' | 'tiada';
 
-export type Route = { name: RouteName; params: Record<string, string>; path: string };
+export type Route = { name: RouteName; params: Record<string, string>; path: string; query?: Record<string, string> };
 
 const TABLE: [RouteName, RegExp, string[]][] = [
   ['home', /^\/$/, []],
@@ -40,8 +40,21 @@ const safeDecode = (s: string) => {
   }
 };
 
+function parseQuery(q: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!q) return out;
+  for (const part of q.split('&')) {
+    if (!part) continue;
+    const [k, v = ''] = part.split('=');
+    out[safeDecode(k)] = safeDecode(v.replace(/\+/g, ' '));
+  }
+  return out;
+}
+
 export function parseHash(hash: string): Route {
-  let p = hash.replace(/^#/, '').split('?')[0];
+  const [rawPath, rawQuery] = hash.replace(/^#/, '').split('?');
+  const query = parseQuery(rawQuery);
+  let p = rawPath;
   if (!p.startsWith('/')) p = '/' + p;
   if (p.length > 1) p = p.replace(/\/+$/, '');
   for (const [name, re, keys] of TABLE) {
@@ -51,9 +64,9 @@ export function parseHash(hash: string): Route {
     keys.forEach((k, i) => {
       if (m[i + 1] !== undefined) params[k] = safeDecode(m[i + 1]);
     });
-    return { name, params, path: p };
+    return { name, params, path: p, query };
   }
-  return { name: 'tiada', params: {}, path: p };
+  return { name: 'tiada', params: {}, path: p, query };
 }
 
 export type GuardState = {
@@ -66,10 +79,13 @@ export type GuardState = {
 export function guard(route: Route, s: GuardState): string | null {
   if (s.status === 'loading' || s.status === 'error') return null;
   const open = OPEN_ROUTES.has(route.name);
-  if (s.status === 'anon') return open ? null : '#/masuk';
+  if (s.status === 'anon') {
+    if (route.name === 'aktif') return '#/masuk?next=aktif';
+    return open ? null : '#/masuk';
+  }
   if (route.name === 'bantuan') return null;
   if (!s.onboarded) return open || route.name === 'onboarding' ? null : '#/onboarding';
-  if (PUBLIC_ROUTES.has(route.name)) return '#/';
+  if (PUBLIC_ROUTES.has(route.name)) return route.query?.next === 'aktif' ? '#/aktif' : '#/';
   if (route.name === 'admin' && !s.roles.some((r) => STAFF_ROLES.includes(r))) return '#/';
   return null;
 }

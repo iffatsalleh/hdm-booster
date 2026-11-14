@@ -84,6 +84,8 @@ export type MockAccount = {
   onboarded_at: string | null;
   roles: string[];
   entitlements: string[];
+  /** Onboarding / target columns of `profiles` (sex, birth_year, height_cm, ...). */
+  profile?: Record<string, unknown>;
 };
 
 /** Registered fixture user: Ali Bin Abu, Pakej Basic, already onboarded. */
@@ -96,7 +98,53 @@ export const ALI: MockAccount = {
   onboarded_at: '2026-11-13T10:00:00+08:00',
   roles: [],
   entitlements: BASIC,
+  profile: {
+    sex: 'L', birth_year: 1996, height_cm: 175, start_weight_kg: 80, start_body_fat_pct: null, start_waist_cm: 92,
+    activity_level: 3, target_weight_kg: 72, protein_target_g: 144, tdee_kcal: null, kcal_target: null,
+  },
 };
+
+/** Onboarded user without the `tdee` / group items (e.g. bought a partial package): TDEE + groups locked. */
+export const AHMAD: MockAccount = {
+  uid: 'mock-ahmad',
+  email: 'ahmad@gmail.com',
+  password: MOCK_PASSWORD,
+  full_name: 'Ahmad Kassim',
+  phone: '60198765432',
+  onboarded_at: '2026-11-13T11:00:00+08:00',
+  roles: [],
+  entitlements: ['ebook_strategi', 'sistem'],
+  profile: {
+    sex: 'L', birth_year: 1988, height_cm: 168, start_weight_kg: 90, activity_level: 2, protein_target_g: 162,
+  },
+};
+
+/** account_summary purchases per fixture uid. */
+export const PURCHASES: Record<string, unknown[]> = {
+  'mock-ali': [{
+    id: 'p-ali-1', order_ref: 'BCL-10293', package_id: 'basic', package_name: 'Pakej Basic', status: 'dituntut',
+    amount_rm: 100, paid_at: '2026-11-12T02:00:00+00:00', batch_id: batch.id, entitlements: BASIC,
+  }],
+};
+
+export const GROUPS = [
+  { id: 'g-hdm', item_key: 'group_hdm', name: 'Group Support HDM', coach: 'Coach Iffat Salleh',
+    description: 'Pemakanan, intermittent fasting & soal jawab harian', invite_url: 'https://chat.whatsapp.com/MOCK-GROUP-HDM' },
+  { id: 'g-mm', item_key: 'group_muscle_mania', name: 'Group Support MUSCLE MANIA', coach: 'Coach Anuar Yusof "Toy"',
+    description: 'Latihan rintangan & jaga otot', invite_url: 'https://chat.whatsapp.com/MOCK-GROUP-MUSCLE-MANIA' },
+];
+
+export type MockCode = { code: string; package_id: string; status: 'baru' | 'aktif' | 'dibatalkan'; expired?: boolean;
+  redeemed_by?: string; redeemed_at?: string };
+
+/** Access codes: HDMB-UPGR-ADE2 upgrades Basic to Complete (7 new items); the rest exercise each failure reason. */
+export const CODES: MockCode[] = [
+  { code: 'HDMB-UPGR-ADE2', package_id: 'upgrade_a_b', status: 'baru' },
+  { code: 'HDMB-PENU-H234', package_id: 'complete', status: 'baru' },
+  { code: 'HDMB-USED-CDE3', package_id: 'complete', status: 'aktif', redeemed_by: 'mock-other', redeemed_at: '2026-11-10T03:00:00+00:00' },
+  { code: 'HDMB-BAT9-KAN2', package_id: 'complete', status: 'dibatalkan' },
+  { code: 'HDMB-TAMA-TEMP', package_id: 'complete', status: 'baru', expired: true },
+];
 
 /** Unclaimed purchase that /api/register accepts (type `012-345 6789`, any email case). */
 export const UNCLAIMED_PURCHASE = { email: 'siti@gmail.com', phone: '60123456789', entitlements: BASIC };
@@ -105,7 +153,7 @@ export function bootstrapFor(a: MockAccount): Bootstrap {
   return {
     profile: {
       id: a.uid, full_name: a.full_name, email: a.email, phone: a.phone, onboarded_at: a.onboarded_at,
-      created_at: '2026-11-13T10:00:00+08:00',
+      created_at: '2026-11-13T10:00:00+08:00', ...(a.profile ?? {}),
     },
     roles: a.roles,
     entitlements: a.entitlements,

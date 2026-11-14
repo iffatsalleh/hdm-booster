@@ -8,7 +8,8 @@ import { DEFAULT_SUPPORT_WA } from '../../lib/config';
 import { signIn, settled } from '../../state/session';
 import { navigate } from '../../router';
 
-export function Login() {
+export function Login({ next }: { next?: string } = {}) {
+  const toAktif = next === 'aktif';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -26,7 +27,7 @@ export function Login() {
     try {
       await signIn(email, password);
       const s = await settled();
-      navigate(s.profile && !s.profile.onboarded_at ? '#/onboarding' : '#/', true);
+      navigate(s.profile && !s.profile.onboarded_at ? '#/onboarding' : toAktif ? '#/aktif' : '#/', true);
     } catch (x) {
       setErr(bm(x));
       setBusy(false);
@@ -44,6 +45,9 @@ export function Login() {
       </section>
       <main style="padding:0 16px">
         <form class="card overlap" style="margin:-24px 0 0" onSubmit={submit} noValidate>
+          {toAktif ? (
+            <Callout tone="blue" icon="ph-fill ph-ticket" style="margin-bottom:12px">Ada kod? Log masuk dahulu, kemudian masukkan kod anda.</Callout>
+          ) : null}
           <Field id="e" label="Emel" type="email" autocomplete="email" inputMode="email" value={email} onInput={setEmail} />
           <Field id="k" label="Kata laluan" type="password" autocomplete="current-password" value={password} onInput={setPassword} />
           <p style="text-align:right;margin-top:10px;font-size:14px"><a href="#/lupa">Lupa kata laluan?</a></p>
