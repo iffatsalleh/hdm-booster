@@ -90,9 +90,11 @@ export function createFirebaseAdmin(opts: {
 
   return {
     async getUserByEmail(email) {
-      const j = await call<{ users?: { localId: string; email?: string }[] }>('accounts:lookup', { email: [email] });
+      const j = await call<{ users?: { localId: string; email?: string; createdAt?: string }[] }>('accounts:lookup', { email: [email] });
       const u = j.users?.[0];
-      return u ? { uid: u.localId, email: u.email ?? email } : null;
+      if (!u) return null;
+      const created = Number(u.createdAt); // Identity Toolkit: ms since epoch, as a string
+      return { uid: u.localId, email: u.email ?? email, createdAt: Number.isFinite(created) && created > 0 ? created : null };
     },
     async createUser({ email, password, displayName }) {
       const body: Record<string, string> = { email, password };

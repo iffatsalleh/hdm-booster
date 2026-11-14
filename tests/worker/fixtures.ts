@@ -35,19 +35,19 @@ export const track = {
 
 /** In-memory FirebaseAdmin. Created uids are test_ uids tracked for cleanup. */
 export function fakeFirebase() {
-  const users = new Map<string, { uid: string; email: string; password: string; displayName?: string }>();
+  const users = new Map<string, { uid: string; email: string; password: string; displayName?: string; createdAt?: number }>();
   const calls = { created: [] as string[], deleted: [] as string[], passwords: [] as [string, string][] };
   const admin: FirebaseAdmin = {
     async getUserByEmail(email) {
       const u = users.get(email.toLowerCase());
-      return u ? { uid: u.uid, email: u.email } : null;
+      return u ? { uid: u.uid, email: u.email, createdAt: u.createdAt ?? Date.now() } : null;
     },
     async createUser({ email, password, displayName }) {
       const e = email.toLowerCase();
       if (users.has(e)) throw Object.assign(new Error('firebase: EMAIL_EXISTS'), { code: 'EMAIL_EXISTS' });
       const uid = newUid().replace('test_', 'test_fb_');
       track.uid(uid);
-      users.set(e, { uid, email: e, password, displayName });
+      users.set(e, { uid, email: e, password, displayName, createdAt: Date.now() });
       calls.created.push(uid);
       return { uid, email: e };
     },
@@ -60,11 +60,11 @@ export function fakeFirebase() {
       calls.passwords.push([uid, password]);
     },
   };
-  /** Pre-existing account (e.g. an orphan from a failed earlier registration). */
-  const seed = (email: string) => {
+  /** Pre-existing account (e.g. an orphan from a failed earlier registration), created `ageMs` ago. */
+  const seed = (email: string, ageMs = 11 * 60_000) => {
     const uid = newUid().replace('test_', 'test_fb_');
     track.uid(uid);
-    users.set(email.toLowerCase(), { uid, email: email.toLowerCase(), password: 'x' });
+    users.set(email.toLowerCase(), { uid, email: email.toLowerCase(), password: 'x', createdAt: Date.now() - ageMs });
     return uid;
   };
   return { admin, users, calls, seed };

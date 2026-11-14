@@ -9,7 +9,9 @@ const KIND = 'register';
 const NAME_MAX = 100;
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** A Firebase account with no profile is only treated as an orphan once it is older than this. */
+const ORPHAN_GRACE_MS = 10 * 60_000;
+const EMAIL_RE =/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Check = { ok: boolean; reason?: string; profile_exists?: boolean };
 type Complete = { ok: boolean; reason?: string; entitlements?: string[] };
@@ -71,6 +73,11 @@ export function publicRoutes(deps: Deps) {
         await record(false);
         return fail(c, 409, 'sudah_didaftar');
       }
+      // A young account without a profile may be a registration still in flight (double-click / retry):
+      // deleting it would leave that request's profile pointing at a non-existent account.
+      // Unknown creation time counts as young (never delete what we cannot date).
+      const age = existing.createdAt == null ? 0 : deps.now() - existing.createdAt;
+      if (age < ORPHAN_GRACE_MS) return fail(c, 409, 'sedang_didaftar');
       await deps.firebaseAdmin.deleteUser(existing.uid);
     }
 

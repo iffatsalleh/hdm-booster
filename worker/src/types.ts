@@ -11,7 +11,8 @@ export interface Hive {
 
 /** Firebase Admin operations (worker/src/firebaseAdmin.ts; tests use an in-memory fake). */
 export interface FirebaseAdmin {
-  getUserByEmail(email: string): Promise<{ uid: string; email: string } | null>;
+  /** createdAt: account creation time in ms (null when Firebase does not report it). */
+  getUserByEmail(email: string): Promise<{ uid: string; email: string; createdAt: number | null } | null>;
   /** Rejects with `code: 'EMAIL_EXISTS'` when the email already has an account. */
   createUser(user: { email: string; password: string; displayName?: string }): Promise<{ uid: string; email?: string }>;
   deleteUser(uid: string): Promise<void>;

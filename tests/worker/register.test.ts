@@ -11,7 +11,8 @@ afterAll(cleanupAll);
 const BASIC = ['ebook_strategi', 'graduation', 'group_hdm', 'sistem', 'tdee'];
 const MSG_TIADA = 'Emel/telefon ini tiada rekod pembelian. Pastikan sama seperti semasa beli di BCL, atau WhatsApp 60134417042.';
 const MSG_SUDAH = 'Emel ini sudah ada akaun. Sila log masuk atau tekan Lupa Kata Laluan.';
-const MSG_RATE = 'Terlalu banyak cubaan. Cuba lagi selepas 15 minit.';
+const MSG_SEDANG = 'Pendaftaran untuk emel ini sedang diproses. Tunggu sebentar, kemudian cuba log masuk.';
+const MSG_RATE ='Terlalu banyak cubaan. Cuba lagi selepas 15 minit.';
 
 const buyer = () => ({ email: `test_${rnd()}@example.test`, phone: randomPhone() });
 const localPhone = (p: string) => '0' + p.slice(2, 4) + '-' + p.slice(4); // 601x... -> 01x-...
@@ -44,12 +45,56 @@ describe('POST /api/register', () => {
     expect((await q(`select entitlements_for($1) as e`, [uid]))[0].e).toEqual(BASIC);
   });
 
-  test('register when orphan Firebase account exists -> orphan deleted, new account, ok', async () => {
+  test('recent orphan (created 1 min ago) is NOT deleted -> 409 sedang_didaftar', async () => {
     const fb = fakeFirebase();
     const app = makeApp({ firebaseAdmin: fb.admin });
     const b = buyer();
     await unclaimedPurchase(b.email, b.phone);
-    const orphan = fb.seed(b.email);
+    const recent = fb.seed(b.email, 60_000);
+    const res = await call(app, 'POST', '/api/register', { ip: newIp(), body: body(b) });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, reason: 'sedang_didaftar', message: MSG_SEDANG });
+    expect(fb.calls.deleted).toEqual([]);
+    expect(fb.calls.created).toEqual([]);
+    expect(fb.users.get(b.email)?.uid).toBe(recent);
+  });
+
+  test('concurrent register (double-click): B arrives before A commits -> A survives with a working profile', async () => {
+    const fb = fakeFirebase();
+    const b = buyer();
+    await unclaimedPurchase(b.email, b.phone);
+    let resB: Response | null = null;
+    let entered = false;
+    let appRef: ReturnType<typeof makeApp> | null = null;
+    // A's register_complete is held until B's whole request has run
+    const interleave: Hive = {
+      ...pgHive,
+      json: (async (sql: string, params?: unknown[]) => {
+        if (/register_complete/.test(sql) && !entered) {
+          entered = true;
+          resB = await call(appRef!, 'POST', '/api/register', { ip: newIp(), body: body(b) });
+        }
+        return pgHive.json(sql, params);
+      }) as Hive['json'],
+    };
+    appRef = makeApp({ firebaseAdmin: fb.admin, hive: interleave });
+    const resA = await call(appRef, 'POST', '/api/register', { ip: newIp(), body: body(b) });
+    expect(resA.status).toBe(200);
+    expect(resB!.status).toBe(409);
+    expect((await resB!.json()).reason).toBe('sedang_didaftar');
+    const uidA = fb.calls.created[0];
+    expect(fb.calls.created).toEqual([uidA]);
+    expect(fb.calls.deleted).toEqual([]);
+    expect(fb.users.get(b.email)?.uid).toBe(uidA);
+    expect((await q('select id from profiles where email = $1', [b.email]))[0].id).toBe(uidA);
+  });
+
+  test('register when old orphan Firebase account exists (11 min) -> orphan deleted, new account, ok', async () => {
+    const fb = fakeFirebase();
+    const app = makeApp({ firebaseAdmin: fb.admin });
+    const b = buyer();
+    await unclaimedPurchase(b.email, b.phone);
+    const orphan = fb.seed(b.email, 11 * 60_000);
     const res = await call(app, 'POST', '/api/register', { ip: newIp(), body: body(b) });
     expect(res.status).toBe(200);
     expect(fb.calls.deleted).toEqual([orphan]);

@@ -22,7 +22,8 @@ export const MSG = {
   // register
   tiada_pembelian: 'Emel/telefon ini tiada rekod pembelian. Pastikan sama seperti semasa beli di BCL, atau WhatsApp 60134417042.',
   sudah_didaftar: 'Emel ini sudah ada akaun. Sila log masuk atau tekan Lupa Kata Laluan.',
-  terlalu_besar: 'Data yang dihantar terlalu besar.',
+  sedang_didaftar: 'Pendaftaran untuk emel ini sedang diproses. Tunggu sebentar, kemudian cuba log masuk.',
+  terlalu_besar:'Data yang dihantar terlalu besar.',
   // admin (reasons raised by the SQL admin functions)
   pengguna_tidak_wujud: 'Peserta tidak dijumpai.',
   item_tidak_sah: 'Item tidak sah.',

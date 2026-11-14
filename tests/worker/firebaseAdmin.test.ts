@@ -66,14 +66,15 @@ describe('createFirebaseAdmin', () => {
         return { json: { access_token: `at-${n}`, expires_in: 3600, token_type: 'Bearer' } };
       },
       '/v1/projects/demo-proj/accounts:lookup': (b) =>
-        b.email?.[0] === 'ada@example.test' ? { json: { users: [{ localId: 'u1', email: 'ada@example.test' }] } } : { json: {} },
+        b.email?.[0] === 'ada@example.test'
+          ? { json: { users: [{ localId: 'u1', email: 'ada@example.test', createdAt: '1799999000000' }] } } : { json: {} },
       '/v1/projects/demo-proj/accounts': (b) => ({ json: { localId: 'new1', email: b.email } }),
       '/v1/projects/demo-proj/accounts:delete': () => ({ json: {} }),
       '/v1/projects/demo-proj/accounts:update': () => ({ json: { localId: 'u1' } }),
     });
     const fa = createFirebaseAdmin({ saJson: sa, projectId: 'demo-proj', fetch: g.f, now: () => nowMs });
 
-    expect(await fa.getUserByEmail('ada@example.test')).toEqual({ uid: 'u1', email: 'ada@example.test' });
+    expect(await fa.getUserByEmail('ada@example.test')).toEqual({ uid: 'u1', email: 'ada@example.test', createdAt: 1799999000000 });
     expect(await fa.getUserByEmail('tiada@example.test')).toBeNull();
     expect(await fa.createUser({ email: 'b@example.test', password: 'rahsia123', displayName: 'B' })).toEqual({ uid: 'new1', email: 'b@example.test' });
     await fa.deleteUser('u1');
