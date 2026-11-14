@@ -2,6 +2,7 @@
 import { createApp } from './app';
 import { firebaseVerifier } from './auth';
 import { createHive } from './hive';
+import { createFirebaseAdmin } from './firebaseAdmin';
 import type { Deps, FirebaseAdmin } from './types';
 
 export interface Env {
@@ -16,23 +17,18 @@ export interface Env {
   GAS_URL: string;
 }
 
-// Implemented in Task 8; until then any use fails loudly.
-const firebaseAdminStub: FirebaseAdmin = {
-  getUserByEmail: () => Promise.reject(new Error('FirebaseAdmin not implemented')),
-  createUser: () => Promise.reject(new Error('FirebaseAdmin not implemented')),
-  deleteUser: () => Promise.reject(new Error('FirebaseAdmin not implemented')),
-  setPassword: () => Promise.reject(new Error('FirebaseAdmin not implemented')),
-};
-
+// Per-isolate singletons: JWKS cache and the OAuth access token survive across requests.
 let verifier: Deps['verifyToken'] | undefined;
+let firebaseAdmin: FirebaseAdmin | undefined;
 
 export default {
   fetch(req: Request, env: Env, ctx: unknown): Response | Promise<Response> {
     verifier ??= firebaseVerifier(env.FIREBASE_PROJECT_ID);
+    firebaseAdmin ??= createFirebaseAdmin({ saJson: env.FIREBASE_SA_JSON, projectId: env.FIREBASE_PROJECT_ID });
     const deps: Deps = {
       verifyToken: verifier,
       hive: createHive({ base: env.HIVE_API_BASE, dbId: env.HIVE_DB_ID, key: env.HIVE_DML_KEY }),
-      firebaseAdmin: firebaseAdminStub,
+      firebaseAdmin,
       secrets: { internal: env.INTERNAL_SECRET, ticket: env.TICKET_SECRET },
       gasUrl: env.GAS_URL,
       now: () => Date.now(),

@@ -9,10 +9,11 @@ export interface Hive {
   json<T = unknown>(sql: string, params?: unknown[]): Promise<T>;
 }
 
-/** Firebase Admin operations (implemented in Task 8). */
+/** Firebase Admin operations (worker/src/firebaseAdmin.ts; tests use an in-memory fake). */
 export interface FirebaseAdmin {
   getUserByEmail(email: string): Promise<{ uid: string; email: string } | null>;
-  createUser(email: string, password: string): Promise<{ uid: string }>;
+  /** Rejects with `code: 'EMAIL_EXISTS'` when the email already has an account. */
+  createUser(user: { email: string; password: string; displayName?: string }): Promise<{ uid: string; email?: string }>;
   deleteUser(uid: string): Promise<void>;
   setPassword(uid: string, password: string): Promise<void>;
 }
@@ -31,6 +32,8 @@ export type Deps = {
   now(): number;
   /** Origins allowed by CORS (parsed from ALLOWED_ORIGINS). */
   allowedOrigins: string[];
+  /** Outbound fetch (Worker -> Apps Script). Defaults to the global fetch. */
+  fetch?: typeof fetch;
 };
 
 export type AppEnv = { Variables: { user: AuthUser } };

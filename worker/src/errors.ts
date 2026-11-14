@@ -19,9 +19,54 @@ export const MSG = {
   tiada_akses: 'Ebook ini tersedia dalam Pakej Complete.',
   tiada_akses_tdee: 'Kalkulator TDEE tiada dalam akses anda. Aktifkan pakej anda atau hubungi admin.',
   tiada_fail: 'Fail ebook ini belum tersedia. Sila cuba lagi kemudian.',
+  // register
+  tiada_pembelian: 'Emel/telefon ini tiada rekod pembelian. Pastikan sama seperti semasa beli di BCL, atau WhatsApp 60134417042.',
+  sudah_didaftar: 'Emel ini sudah ada akaun. Sila log masuk atau tekan Lupa Kata Laluan.',
+  terlalu_besar: 'Data yang dihantar terlalu besar.',
+  // admin (reasons raised by the SQL admin functions)
+  pengguna_tidak_wujud: 'Peserta tidak dijumpai.',
+  item_tidak_sah: 'Item tidak sah.',
+  pakej_tidak_wujud: 'Pakej tidak dijumpai.',
+  tindakan_tidak_sah: 'Tindakan tidak sah.',
+  kod_tidak_wujud: 'Kod tidak dijumpai.',
+  kod_belum_digunakan: 'Kod ini belum digunakan.',
+  pembelian_tidak_wujud: 'Pembelian tidak dijumpai.',
+  geran_tidak_wujud: 'Akses manual tidak dijumpai.',
+  geran_sudah_ditarik: 'Akses manual ini sudah ditarik balik.',
+  bilangan_tidak_sah: 'Bilangan kod mesti antara 1 dan 500.',
+  gagal_jana_kod: 'Gagal menjana kod. Sila cuba lagi.',
+  gas_gagal: 'Apps Script tidak dapat dihubungi. Sila cuba lagi sebentar lagi.',
 } as const;
 
-export type FailStatus = 400 | 401 | 403 | 404 | 429 | 500;
+export type FailStatus = 400 | 401 | 403 | 404 | 409 | 413 | 429 | 500 | 502;
+
+/** Reasons raised (`raise exception '<reason>'`) by SQL admin functions that are the caller's fault (400). */
+const SQL_REASONS = [
+  'pengguna_tidak_wujud', 'item_tidak_sah', 'pakej_tidak_wujud', 'tindakan_tidak_sah', 'kod_tidak_wujud',
+  'kod_belum_digunakan', 'pembelian_tidak_wujud', 'geran_tidak_wujud', 'geran_sudah_ditarik', 'bilangan_tidak_sah',
+] as const;
+
+/** SQLSTATE of a pg error (`.code`) or of a HornetHive REST error (`hive: msg [CODE] ...`). */
+function sqlState(e: unknown): string | null {
+  const code = (e as { code?: unknown })?.code;
+  if (typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code)) return code;
+  const m = /\[([0-9A-Z]{5})\]/.exec(e instanceof Error ? e.message : String(e));
+  return m ? m[1] : null;
+}
+
+/**
+ * Maps a DB error to a client response: role refusal -> 403, known SQL reasons -> 400 with that reason,
+ * constraint / bad-value errors (SQLSTATE 22xxx, 23xxx) -> 400 data_tidak_sah. Anything else is rethrown (500).
+ */
+export function dbFail(c: Context, e: unknown) {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/\btiada_kebenaran\b/.test(msg)) return fail(c, 403, 'tiada_kebenaran');
+  const reason = SQL_REASONS.find((r) => new RegExp(`\\b${r}\\b`).test(msg));
+  if (reason) return fail(c, 400, reason);
+  const st = sqlState(e);
+  if (st && (st.startsWith('22') || st.startsWith('23'))) return fail(c, 400, 'data_tidak_sah');
+  throw e;
+}
 
 export function fail(c: Context, status: FailStatus, reason: string, message?: string) {
   const msg = message ?? (MSG as Record<string, string>)[reason] ?? MSG.ralat_pelayan;

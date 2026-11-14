@@ -27,16 +27,54 @@ const ROUTES: Route[] = [
 ];
 const label = (r: Route) => `${r.method} ${r.path(':id')}`;
 
-/** Representative admin paths (Task 8 must extend this with every real /api/admin/* route). */
-const ADMIN_ROUTES: [string, string][] = [
-  ['GET', '/api/admin/ping'],
+/** EVERY /api/admin/* route (Hono pattern). coach: true = Coach Iffat may call it (read-only). */
+type AdminRoute = { method: string; pattern: string; coach?: boolean };
+const ADMIN_ROUTE_LIST: AdminRoute[] = [
+  { method: 'GET', pattern: '/api/admin/ping' },
+  { method: 'GET', pattern: '/api/admin/summary', coach: true },
+  { method: 'GET', pattern: '/api/admin/participants', coach: true },
+  { method: 'GET', pattern: '/api/admin/participants/:uid', coach: true },
+  { method: 'POST', pattern: '/api/admin/participants/:uid/grant' },
+  { method: 'POST', pattern: '/api/admin/participants/:uid/reset-password' },
+  { method: 'POST', pattern: '/api/admin/grants/:id/revoke' },
+  { method: 'GET', pattern: '/api/admin/purchases' },
+  { method: 'POST', pattern: '/api/admin/purchases/:id/action' },
+  { method: 'POST', pattern: '/api/admin/purchases/:id/reprocess' },
+  { method: 'POST', pattern: '/api/admin/purchases/:id/resend-welcome' },
+  { method: 'GET', pattern: '/api/admin/bcl-map' },
+  { method: 'GET', pattern: '/api/admin/bcl-map/:id' },
+  { method: 'POST', pattern: '/api/admin/bcl-map' },
+  { method: 'PUT', pattern: '/api/admin/bcl-map/:id' },
+  { method: 'DELETE', pattern: '/api/admin/bcl-map/:id' },
+  { method: 'GET', pattern: '/api/admin/codes' },
+  { method: 'POST', pattern: '/api/admin/codes/generate' },
+  { method: 'POST', pattern: '/api/admin/codes/:id/action' },
+  { method: 'GET', pattern: '/api/admin/content/:table' },
+  { method: 'GET', pattern: '/api/admin/content/:table/:id' },
+  { method: 'POST', pattern: '/api/admin/content/:table' },
+  { method: 'PUT', pattern: '/api/admin/content/:table/:id' },
+  { method: 'DELETE', pattern: '/api/admin/content/:table/:id' },
+  { method: 'GET', pattern: '/api/admin/audit' },
+];
+/** Public /api routes (no token). */
+const PUBLIC_ROUTES = ['POST /api/register'];
+
+/** Unrouted /api/admin paths: the prefix guard must still answer 401/403 (never 404 to a non-admin). */
+const UNROUTED_ADMIN: [string, string][] = [
   ['GET', '/api/admin/users'],
-  ['POST', '/api/admin/codes/generate'],
   ['PUT', '/api/admin/settings/support_wa'],
   ['DELETE', '/api/admin/users/x'],
 ];
 
+const concrete = (pattern: string, uid: string) =>
+  pattern.replace(':uid', uid).replace(':id', PLACEHOLDER_EBOOK).replace(':table', 'items');
+const ADMIN_ROUTES: [string, string][] = [
+  ...ADMIN_ROUTE_LIST.map((r) => [r.method, concrete(r.pattern, 'test_someone')] as [string, string]),
+  ...UNROUTED_ADMIN,
+];
+
 let A = '';
+let COACH = '';
 let B = '';
 let NOPKG = '';
 let e1 = '';
@@ -45,6 +83,8 @@ let e2 = '';
 beforeAll(async () => {
   A = await profile();
   B = await profile();
+  COACH = await profile();
+  await q(`insert into user_roles (user_id, role) values ($1, 'coach')`, [COACH]);
   NOPKG = await profile();
   await purchase(A, 'basic');
   await purchase(B, 'complete');
@@ -162,5 +202,61 @@ describe('admin boundary', () => {
   test.each(ADMIN_ROUTES)('no token %s %s -> 401', async (method, path) => {
     const res = await call(app, method, path);
     expect(res.status).toBe(401);
+  });
+
+  test.each(ADMIN_ROUTE_LIST.map((r) => [r.method, r.pattern, r] as const))('coach %s %s', async (_m, _p, r) => {
+    const res = await call(app, r.method, concrete(r.pattern, COACH), { uid: COACH, body: r.method === 'GET' ? undefined : {} });
+    if (r.coach) {
+      expect(res.status).toBe(200);
+    } else {
+      expect(res.status).toBe(403);
+      expect((await res.json()).reason).toBe('tiada_kebenaran');
+    }
+  });
+
+  test.each(UNROUTED_ADMIN)('coach on unrouted %s %s -> 403', async (method, path) => {
+    const res = await call(app, method, path, { uid: COACH, body: method === 'GET' ? undefined : {} });
+    expect(res.status).toBe(403);
+  });
+
+  test('coach HEAD / trailing-slash / case variants of coach routes do not open other routes', async () => {
+    for (const [m, p] of [['POST', '/api/admin/summary'], ['GET', '/api/admin/participants/x/grant'], ['GET', '/api/admin/SUMMARY'],
+      ['POST', `/api/admin/participants/${A}`]]) {
+      const res = await call(app, m, p, { uid: COACH, body: m === 'GET' ? undefined : {} });
+      expect(res.status, `${m} ${p}`).toBe(403);
+    }
+  });
+});
+
+describe('route inventory', () => {
+  const key = (m: string, p: string) => `${m} ${p}`;
+  const actual = (prefix: string) => [...new Set(
+    app.routes.filter((r) => r.method !== 'ALL' && r.path.startsWith(prefix)).map((r) => key(r.method, r.path)),
+  )].sort();
+
+  test('every /api/ route is listed in ROUTES, ADMIN_ROUTE_LIST or PUBLIC_ROUTES (and no stale entries)', () => {
+    const listed = new Set([
+      ...ROUTES.map((r) => key(r.method, r.path(':id'))),
+      ...ADMIN_ROUTE_LIST.map((r) => key(r.method, r.pattern)),
+      ...PUBLIC_ROUTES,
+    ]);
+    const routes = actual('/api/');
+    expect(routes.filter((x) => !listed.has(x)), 'unlisted routes').toEqual([]);
+    expect([...listed].filter((x) => !routes.includes(x)), 'stale entries').toEqual([]);
+  });
+
+  test('every /internal/ route rejects an unsigned request with 401', async () => {
+    const routes = actual('/internal/');
+    expect(routes.length).toBeGreaterThan(5);
+    for (const r of routes) {
+      const [m, p] = r.split(' ');
+      const res = await app.request(p.replace(':id', PLACEHOLDER_EBOOK), { method: m, body: m === 'GET' ? undefined : '{}' });
+      expect(res.status, r).toBe(401);
+    }
+  });
+
+  test('/api body over 16 KB -> 413', async () => {
+    const res = await call(app, 'POST', '/api/register', { body: { email: 'a'.repeat(17 * 1024) }, ip: newIp() });
+    expect(res.status).toBe(413);
   });
 });

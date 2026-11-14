@@ -1,10 +1,17 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import { createMiddleware } from 'hono/factory';
 import type { AppEnv, Deps } from './types';
 import { fail, ok, MSG } from './errors';
-import { requireInternal, requireRole, requireUser } from './guard';
+import { requireInternal, requireUser } from './guard';
 import { meRoutes } from './routes/me';
 import { codesRoutes } from './routes/codes';
 import { ebookRoutes } from './routes/ebook';
+import { publicRoutes } from './routes/public';
+import { adminRoutes, COACH_ROUTES } from './routes/admin';
+import { internalRoutes } from './routes/internal';
+
+const BODY_LIMIT = 16 * 1024;
 
 export function createApp(deps: Deps) {
   const app = new Hono<AppEnv>();
@@ -28,10 +35,28 @@ export function createApp(deps: Deps) {
     if (allowed) c.res.headers.set('Access-Control-Allow-Origin', origin!);
   });
 
-  // Admin boundary: EVERY /api/admin/* path (existing or not) needs a profile with the superadmin role.
-  // Individual admin routes (Task 8) may add narrower checks but never loosen this one.
-  app.use('/api/admin/*', requireUser(deps), requireRole('superadmin'));
+  // Request bodies are small JSON documents everywhere.
+  const limit = bodyLimit({ maxSize: BODY_LIMIT, onError: (c) => fail(c, 413, 'terlalu_besar') });
+  app.use('/api/*', limit);
+  app.use('/internal/*', limit);
+
+  // Admin boundary: EVERY /api/admin/* path (existing or not) needs a profile with the superadmin role,
+  // except plain GETs of the coach read-only routes (COACH_ROUTES), which a coach may also call.
+  app.use(
+    '/api/admin/*',
+    requireUser(deps),
+    createMiddleware<AppEnv>(async (c, next) => {
+      const roles = c.get('user').roles;
+      const coachOk = roles.includes('coach') && c.req.method === 'GET' && COACH_ROUTES.some((re) => re.test(c.req.path));
+      if (!roles.includes('superadmin') && !coachOk) return fail(c, 403, 'tiada_kebenaran');
+      await next();
+    }),
+  );
   app.get('/api/admin/ping', (c) => ok(c, { pong: true }));
+  app.route('/api/admin', adminRoutes(deps));
+
+  // Public routes (no token).
+  app.route('/api', publicRoutes(deps));
 
   // Participant routes (each route carries requireUser itself).
   app.route('/api', meRoutes(deps));
@@ -39,6 +64,7 @@ export function createApp(deps: Deps) {
   app.route('/api', ebookRoutes(deps));
 
   app.post('/internal/ping', requireInternal(deps), (c) => ok(c, { pong: true }));
+  app.route('/internal', internalRoutes(deps));
 
   app.notFound((c) => fail(c, 404, 'tiada'));
   app.onError((err, c) => {

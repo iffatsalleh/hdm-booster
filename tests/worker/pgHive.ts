@@ -26,8 +26,22 @@ export const hivePool = new pg.Pool({
   types: types as any,
 });
 
+const CONNECT_ERRORS = new Set(['ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND']);
+/** Retries only failures to CONNECT (the remote pooler occasionally drops a SYN); query errors are never retried. */
+export async function withConnectRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const code = (e as { code?: string }).code ?? '';
+      const connectFail = CONNECT_ERRORS.has(code) || /timeout exceeded when trying to connect/i.test(String((e as Error).message));
+      if (!connectFail || i >= attempts) throw e;
+    }
+  }
+}
+
 async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
-  return (await hivePool.query(sql, params as any[])).rows as T[];
+  return withConnectRetry(async () => (await hivePool.query(sql, params as any[])).rows as T[]);
 }
 
 async function one<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T> {
