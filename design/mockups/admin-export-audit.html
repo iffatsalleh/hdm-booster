@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Export &amp; Audit — Admin HDM BOOSTER</title>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/bold/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/fill/style.css">
+<link rel="stylesheet" href="hdm.css">
+
+</head>
+<body>
+<div class="admin">
+  <aside class="side">
+    <span class="wordmark">HDM <b>BOOSTER</b></span>
+    <span class="role"><span class="badge navy">Superadmin</span></span>
+    <a href="admin-ringkasan.html"><i class="ph ph-squares-four"></i> Ringkasan</a><a href="admin-pembelian.html"><i class="ph ph-receipt"></i> Pembelian<span class="count">3</span></a><a href="admin-kod.html"><i class="ph ph-key"></i> Kod Akses</a><a href="admin-peserta.html"><i class="ph ph-users-three"></i> Peserta</a><a href="admin-bcl.html"><i class="ph ph-plugs-connected"></i> Pemetaan BCL</a><a href="admin-kandungan.html"><i class="ph ph-books"></i> Kandungan</a><a href="admin-export-audit.html" class="on"><i class="ph ph-clipboard-text"></i> Export &amp; Audit</a>
+    <div class="foot">
+      <a href="utama.html"><i class="ph ph-arrow-u-up-left"></i> Kembali ke app</a>
+      <a href="#"><i class="ph ph-sign-out"></i> Log keluar</a>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="main-top">
+      <div class="head-row"><h1>Export &amp; Audit</h1></div>
+      <div class="tools">
+        <span class="select"><i class="ph ph-calendar-blank"></i> Batch Rejab 1448 <i class="ph ph-caret-down"></i></span>
+        <span class="select"><i class="ph ph-clock"></i> 14/11/2026</span>
+      </div>
+    </div>
+
+    <section style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      <div class="card"><div class="row"><span class="ic blue"><i class="ph ph-users-three"></i></span><div><div class="small muted" style="font-weight:700">Peserta</div><div class="num" style="font-size:30px">131</div></div></div><p class="small muted" style="margin:8px 0 14px">Nama, emel, telefon, pakej, status onboarding</p><a class="btn outline block" href="#"><i class="ph-bold ph-download-simple"></i> Muat turun CSV</a></div>
+      <div class="card"><div class="row"><span class="ic blue"><i class="ph ph-receipt"></i></span><div><div class="small muted" style="font-weight:700">Pembelian</div><div class="num" style="font-size:30px">140</div></div></div><p class="small muted" style="margin:8px 0 14px">Order ref, jumlah RM, tarikh bayar, status</p><a class="btn outline block" href="#"><i class="ph-bold ph-download-simple"></i> Muat turun CSV</a></div>
+      <div class="card"><div class="row"><span class="ic blue"><i class="ph ph-key"></i></span><div><div class="small muted" style="font-weight:700">Kod akses</div><div class="num" style="font-size:30px">50</div></div></div><p class="small muted" style="margin:8px 0 14px">Kod, pakej, status, tarikh tebus</p><a class="btn outline block" href="#"><i class="ph-bold ph-download-simple"></i> Muat turun CSV</a></div>
+    </section>
+    <section class="card" style="margin-top:16px">
+      <div class="card-h"><h2>Audit log</h2></div>
+      <div class="toolbar"><span class="select">Pelaku <i class="ph ph-caret-down"></i></span><span class="select">Tindakan <i class="ph ph-caret-down"></i></span><span class="select"><i class="ph ph-calendar-blank"></i> Tarikh: 07/11/2026 – 14/11/2026</span></div>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>Masa</th><th>Pelaku</th><th>Tindakan</th><th>Sasaran</th><th>Butiran</th></tr></thead><tbody><tr><td>14/11/2026 10:21</td><td><b>Zahirah Ismail</b> <span class="badge navy">Superadmin</span></td><td><span class="mono">code.generate</span></td><td>20 kod Basic · Batch Rejab 1448</td><td><span class="trunc">{"pakej":"basic","bilangan":20,"label":"Giveaway IG"}</span> <a class="small" href="#">lihat</a></td></tr><tr><td>14/11/2026 09:58</td><td><b>Zahirah Ismail</b> <span class="badge navy">Superadmin</span></td><td><span class="mono">purchase.set_package</span></td><td>BCL-10411 Siti Aminah</td><td><span class="trunc">{"pakej":"complete","dari":null}</span> <a class="small" href="#">lihat</a></td></tr><tr><td>14/11/2026 09:30</td><td><b>Hafiz Rosli</b> <span class="badge blue">Admin</span></td><td><span class="mono">grant.add</span></td><td>Ali Bin Abu</td><td><span class="trunc">{"item":"sesi_zoom","sebab":"ganti sesi terlepas"}</span> <a class="small" href="#">lihat</a></td></tr><tr><td>13/11/2026 21:14</td><td><b>Hafiz Rosli</b> <span class="badge blue">Admin</span></td><td><span class="mono">password.reset</span></td><td>Ali Bin Abu</td><td><span class="trunc">{"kaedah":"temp","dipaparkan":true}</span> <a class="small" href="#">lihat</a></td></tr><tr><td>13/11/2026 16:40</td><td><b>Zahirah Ismail</b> <span class="badge navy">Superadmin</span></td><td><span class="mono">code.cancel</span></td><td>HDMB-R8NB-6YCA</td><td><span class="trunc">{"sebab":"salah pakej","status_lama":"belum_guna"}</span> <a class="small" href="#">lihat</a></td></tr><tr><td>13/11/2026 11:02</td><td><b>Zahirah Ismail</b> <span class="badge navy">Superadmin</span></td><td><span class="mono">code.generate</span></td><td>1 kod Complete · Siti Aminah</td><td><span class="trunc">{"pakej":"complete","bilangan":1}</span> <a class="small" href="#">lihat</a></td></tr></tbody></table></div>
+      <div class="pager"><span>1–6 daripada 212 entri</span><div class="pg"><span class="on">1</span><span>2</span><span>3</span><span>…</span><span>36</span></div></div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

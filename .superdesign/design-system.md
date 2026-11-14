@@ -28,6 +28,16 @@
 
 Rekod and Cabaran are placeholders labelled "Dibuka 10/12/2026".
 
+## Source of truth (owner decision 14/11/2026)
+- Colours and fonts follow the sales page https://mestijadi.bcl.my/form/hdmbooster, which is the same design as the local `index.html`.
+- Mockups are hand-written HTML in `design/mockups/` with the shared stylesheet `design/mockups/hdm.css`. Superdesign is no longer used.
+- Additions taken from the sales page:
+  - Green CTA gradient `linear-gradient(135deg,#16a34a,#065f46)`
+  - Light green `#22c55e`, `#4ade80`, and the light green border `#dcfce7`
+  - Blue→violet gradient `#2563eb→#7c3aed` for special highlights only
+  - Card radius 18px
+  - Gloria Hallelujah for short handwritten notes only
+
 ## Visual direction
 The member area keeps the look of the owner's HDM BOOSTER landing page:
 - A confident deep navy hero with a soft blue radial glow

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pemetaan BCL — Admin HDM BOOSTER</title>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/bold/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/fill/style.css">
+<link rel="stylesheet" href="hdm.css">
+
+</head>
+<body>
+<div class="admin">
+  <aside class="side">
+    <span class="wordmark">HDM <b>BOOSTER</b></span>
+    <span class="role"><span class="badge navy">Superadmin</span></span>
+    <a href="admin-ringkasan.html"><i class="ph ph-squares-four"></i> Ringkasan</a><a href="admin-pembelian.html"><i class="ph ph-receipt"></i> Pembelian<span class="count">3</span></a><a href="admin-kod.html"><i class="ph ph-key"></i> Kod Akses</a><a href="admin-peserta.html"><i class="ph ph-users-three"></i> Peserta</a><a href="admin-bcl.html" class="on"><i class="ph ph-plugs-connected"></i> Pemetaan BCL</a><a href="admin-kandungan.html"><i class="ph ph-books"></i> Kandungan</a><a href="admin-export-audit.html"><i class="ph ph-clipboard-text"></i> Export &amp; Audit</a>
+    <div class="foot">
+      <a href="utama.html"><i class="ph ph-arrow-u-up-left"></i> Kembali ke app</a>
+      <a href="#"><i class="ph ph-sign-out"></i> Log keluar</a>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="main-top">
+      <div class="head-row"><h1>Pemetaan BCL</h1></div>
+      <div class="tools">
+        <span class="select"><i class="ph ph-calendar-blank"></i> Batch Rejab 1448 <i class="ph ph-caret-down"></i></span>
+        <span class="select"><i class="ph ph-clock"></i> 14/11/2026</span>
+      </div>
+    </div>
+
+    <div class="stack-c">
+    <div class="callout blue"><i class="ph-fill ph-info"></i><div>Padankan borang BCL kepada pakej. Order dari borang yang tiada dalam senarai akan diabaikan.</div></div>
+    <div class="card">
+      <div class="card-h"><h2>Pemetaan borang</h2></div>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>Formable ID</th><th>Jumlah RM</th><th>Nilai medan</th><th>Pakej</th><th>Aktif</th><th></th></tr></thead><tbody><tr><td><input class="input sm " value="frm_hdmb_a"></td><td><div class="row"><span class="small muted">RM</span><input class="input sm " value="197"><span class="tiny subtle" style="white-space:nowrap">±RM3</span></div></td><td><input class="input sm " value="" placeholder="Opsyen"></td><td><span class="select">Pakej A (Basic) <i class="ph ph-caret-down"></i></span></td><td><span class="toggle"></span></td><td><span class="kebab" style="color:var(--red)"><i class="ph ph-trash"></i></span></td></tr><tr><td><input class="input sm " value="frm_hdmb_b"></td><td><div class="row"><span class="small muted">RM</span><input class="input sm " value="297"><span class="tiny subtle" style="white-space:nowrap">±RM3</span></div></td><td><input class="input sm " value="" placeholder="Opsyen"></td><td><span class="select">Pakej B (Complete) <i class="ph ph-caret-down"></i></span></td><td><span class="toggle"></span></td><td><span class="kebab" style="color:var(--red)"><i class="ph ph-trash"></i></span></td></tr><tr><td><input class="input sm " value="frm_hdmb_up"></td><td><div class="row"><span class="small muted">RM</span><input class="input sm " value="100"><span class="tiny subtle" style="white-space:nowrap">±RM3</span></div></td><td><input class="input sm " value="" placeholder="Opsyen"></td><td><span class="select">Upgrade A→B <i class="ph ph-caret-down"></i></span></td><td><span class="toggle"></span></td><td><span class="kebab" style="color:var(--red)"><i class="ph ph-trash"></i></span></td></tr><tr><td><input class="input sm " value="frm_hdmb_bf"></td><td><div class="row"><span class="small muted">RM</span><input class="input sm " value="197"><span class="tiny subtle" style="white-space:nowrap">±RM3</span></div></td><td><input class="input sm " value="Bonus: Ya"></td><td><span class="select">Pakej A (Basic) <i class="ph ph-caret-down"></i></span></td><td><span class="toggle off"></span></td><td><span class="kebab" style="color:var(--red)"><i class="ph ph-trash"></i></span></td></tr></tbody></table></div>
+      <div class="row between" style="margin-top:14px"><a class="btn outline sm" href="#"><i class="ph-bold ph-plus"></i> Tambah pemetaan</a><a class="btn" href="#">Simpan</a></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>Log webhook terkini</h2></div>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>Masa</th><th>Order</th><th>Jenis</th><th>Mesej</th><th></th></tr></thead><tbody><tr><td>14/11/2026 09:42</td><td><span class="mono">BCL-10430</span></td><td><span class="badge red">ralat</span></td><td>Telefon tidak sah: "0123"</td><td><a class="btn sm outline" href="#">Proses semula</a></td></tr><tr><td>14/11/2026 08:15</td><td><span class="mono">BCL-10422</span></td><td><span class="badge red">ralat</span></td><td>Jumlah RM147 tiada padanan pakej</td><td><a class="btn sm outline" href="#">Proses semula</a></td></tr><tr><td>13/11/2026 22:03</td><td><span class="mono">BCL-10411</span></td><td><span class="badge yellow">skipped</span></td><td>Tiada batch dibuka pada tarikh bayar</td><td><a class="btn sm outline" href="#">Proses semula</a></td></tr><tr><td>13/11/2026 19:20</td><td><span class="mono">BCL-10419</span></td><td><span class="badge green">diterima</span></td><td>Order direkod, emel dihantar</td><td></td></tr><tr><td>13/11/2026 17:55</td><td><span class="mono">BCL-10418</span></td><td><span class="badge grey">ignored</span></td><td>Borang tiada dalam senarai pemetaan</td><td></td></tr><tr><td>13/11/2026 15:08</td><td><span class="mono">BCL-10415</span></td><td><span class="badge green">diterima</span></td><td>Order direkod, emel dihantar</td><td></td></tr></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2 style="margin-bottom:10px">URL webhook</h2>
+      <div class="row"><span class="mask input" style="display:flex;align-items:center;background:#f8fafc">https://script.google.com/macros/s/AKfy…/exec?src=bcl&amp;k=••••••</span><a class="btn outline sm" href="#"><i class="ph ph-copy"></i> Salin</a></div>
+    </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
