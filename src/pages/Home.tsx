@@ -5,7 +5,7 @@ import { Button } from '../ui/Button';
 import { LockBadge } from '../ui/LockBadge';
 import { setting, useSession, type Batch } from '../state/session';
 import { countdownParts, ebookStats, firstName, packageLabel, phaseIndex, startInstant } from '../lib/home';
-import { formatDMY, programWeek, todayMYT, daysUntil } from '../lib/dates';
+import { formatDMY, programWeek, todayMYT } from '../lib/dates';
 import { fillTemplate, waLink } from '../lib/wa';
 import { DEFAULT_SUPPORT_WA } from '../lib/config';
 
@@ -24,7 +24,6 @@ function useNow(ms = 1000) {
 function Countdown({ batch }: { batch: Batch }) {
   const now = useNow();
   const c = countdownParts(startInstant(batch.program_start), now);
-  const days = daysUntil(batch.program_start, todayMYT(new Date(now)));
   const cells: [string, string, boolean][] = [
     [String(c.days), 'Hari', false],
     [pad(c.hours), 'Jam', false],
@@ -34,7 +33,7 @@ function Countdown({ batch }: { batch: Batch }) {
   return (
     <>
       <p class="small" aria-hidden="true">Program bermula dalam</p>
-      <span class="sr-only">{`Program bermula dalam ${days} hari`}</span>
+      <span class="sr-only">{`Program bermula dalam ${c.days} hari`}</span>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px" aria-hidden="true">
         {cells.map(([v, l, y]) => (
           <div key={l} class="glass" style="text-align:center;padding:10px 4px">

@@ -44,5 +44,3 @@ export const config: HdmConfig = resolveConfig(
 
 /** Fallback support number when app settings are not loaded yet (e.g. on the login screen). */
 export const DEFAULT_SUPPORT_WA = '60134417042';
-/** Label shown on the public auth screens (no batch data is available before login). */
-export const PUBLIC_BATCH_LABEL = 'Batch Rejab 1448';

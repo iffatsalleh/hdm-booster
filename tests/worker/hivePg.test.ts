@@ -79,7 +79,7 @@ describe('createPgHive', () => {
       code: 'P0001', detail: 'secret detail 0123', where: 'PL/pgSQL function x', query: 'select secret',
     });
     const hive = createPgHive('x', fakeClient({ failQuery: pgErr }).factory);
-    const err = await hive.json('select secret_fn($1) as r', ['secret-param']).catch((e) => e);
+    const err = (await hive.json('select secret_fn($1) as r', ['secret-param']).catch((e) => e)) as Error & { code?: string };
     expect(err).toBeInstanceOf(Error);
     expect(err.code).toBe('P0001');
     expect(err.message).toContain('pengguna_tidak_wujud');
@@ -95,7 +95,7 @@ describe('createPgHive', () => {
       failConnect: Object.assign(new Error('connect ECONNREFUSED postgres://user:pw@host:5432/db'), { code: 'ECONNREFUSED' }),
     });
     const hive = createPgHive('postgres://user:pw@host:5432/db', factory);
-    const err = await hive.json('s').catch((e) => e);
+    const err = (await hive.json('s').catch((e) => e)) as Error & { code?: string };
     expect(err.message).toBe('hive: connect failed [ECONNREFUSED]');
     expect(err.message).not.toContain('pw');
     await hive.json('s').catch(() => {});

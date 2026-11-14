@@ -3,7 +3,8 @@ import { Layout } from '../ui/Layout';
 import { Card, HealthNote } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { useSession } from '../state/session';
-import { daysUntil, formatDMY, todayMYT } from '../lib/dates';
+import { formatDMY } from '../lib/dates';
+import { daysLeft } from '../lib/home';
 import type { RouteName } from '../router';
 
 const CHIPS: [string, string][] = [
@@ -13,7 +14,7 @@ const CHIPS: [string, string][] = [
 export function Rekod({ route }: { route: RouteName }) {
   const s = useSession();
   const start = s.batch?.program_start ?? '2026-12-10';
-  const left = Math.max(0, daysUntil(start, todayMYT()));
+  const left = daysLeft(start, Date.now());
   return (
     <Layout route={route}>
       <section class="hero">

@@ -4,7 +4,7 @@ import { Button } from '../../ui/Button';
 import { Callout, HealthNote } from '../../ui/Card';
 import { bm } from '../../lib/errors';
 import { waLink } from '../../lib/wa';
-import { DEFAULT_SUPPORT_WA, PUBLIC_BATCH_LABEL } from '../../lib/config';
+import { DEFAULT_SUPPORT_WA } from '../../lib/config';
 import { signIn, settled } from '../../state/session';
 import { navigate } from '../../router';
 
@@ -38,7 +38,7 @@ export function Login() {
       <section class="hero hero-band" style="border-radius:0 0 24px 24px;padding-bottom:44px">
         <span class="wordmark">HDM <b>BOOSTER</b></span>
         <div style="margin-top:18px">
-          <span class="pill-t"><i class="ph-fill ph-moon-stars" aria-hidden="true" /> {PUBLIC_BATCH_LABEL}</span>
+          <span class="pill-t"><i class="ph-fill ph-moon-stars" aria-hidden="true" /> Rejab · Syaaban · Ramadan</span>
         </div>
         <h1 style="font-size:26px;margin-top:14px">Selamat kembali</h1>
       </section>
@@ -62,6 +62,7 @@ export function Login() {
         >
           Perlukan bantuan? WhatsApp {DEFAULT_SUPPORT_WA}
         </Button>
+        <p class="linkrow" style="margin-top:12px"><a href="#/bantuan">Bantuan &amp; soalan lazim</a></p>
         <HealthNote />
       </main>
     </div>

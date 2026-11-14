@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { countdownParts, startInstant, packageLabel, ebookStats, firstName, initials, phaseIndex } from '../../src/lib/home';
+import { countdownParts, daysLeft, startInstant, packageLabel, ebookStats, firstName, initials, phaseIndex } from '../../src/lib/home';
 
 const packages = [
   { id: 'basic', name: 'Pakej Basic', items: ['ebook_strategi', 'graduation', 'group_hdm', 'sistem', 'tdee'] },
@@ -20,6 +20,21 @@ describe('countdown', () => {
     const start = startInstant('2026-12-10');
     const now = start - (25 * 86400 + 8 * 3600 + 14 * 60 + 52) * 1000;
     expect(countdownParts(start, now)).toEqual({ days: 25, hours: 8, minutes: 14, seconds: 52, done: false });
+  });
+
+  it('boundary: 00:30 MYT on 09/12/2026 -> 0 days 23:30:00, and the "N hari" text agrees with the grid', () => {
+    const now = Date.parse('2026-12-09T00:30:00+08:00');
+    const c = countdownParts(startInstant('2026-12-10'), now);
+    expect(c).toEqual({ days: 0, hours: 23, minutes: 30, seconds: 0, done: false });
+    expect(daysLeft('2026-12-10', now)).toBe(c.days);
+  });
+
+  it('daysLeft is floor(remaining ms / 1 day) from 00:00 MYT', () => {
+    expect(daysLeft('2026-12-10', Date.parse('2026-12-08T23:59:59+08:00'))).toBe(1);
+    expect(daysLeft('2026-12-10', Date.parse('2026-12-09T00:00:00+08:00'))).toBe(1);
+    expect(daysLeft('2026-12-10', Date.parse('2026-12-09T00:00:01+08:00'))).toBe(0);
+    expect(daysLeft('2026-12-10', Date.parse('2026-11-14T22:20:00+08:00'))).toBe(25);
+    expect(daysLeft('2026-12-10', Date.parse('2026-12-11T09:00:00+08:00'))).toBe(0);
   });
 
   it('clamps at zero once started', () => {

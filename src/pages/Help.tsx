@@ -24,6 +24,9 @@ export function Help() {
   const s = useSession();
   const [os, setOs] = useState<'android' | 'iphone'>(() => (/iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'iphone' : 'android'));
   const wa = setting(s, 'support_wa', DEFAULT_SUPPORT_WA);
+  // Bantuan is open to everyone: tab bar only for onboarded members; back goes where the user can actually go.
+  const member = s.status === 'ready' && !!s.profile?.onboarded_at;
+  const back = member ? '#/' : s.user ? '#/onboarding' : '#/masuk';
   const opens = s.batch ? formatDMY(s.batch.program_start) : '10/12/2026';
 
   const faq: [string, string][] = [
@@ -35,7 +38,7 @@ export function Help() {
   ];
 
   return (
-    <Layout route="bantuan" title="Bantuan">
+    <Layout route="bantuan" title="Bantuan" back={back} tabs={member}>
       {faq.map(([q, a], i) => (
         <details key={q} class="faq" open={i === 0}>
           <summary>{q}</summary>

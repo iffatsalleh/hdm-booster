@@ -54,22 +54,22 @@ describe('guard', () => {
   });
 
   it('no user -> #/masuk, except public auth pages', () => {
-    for (const h of ['#/', '#/ebook', '#/bantuan', '#/rekod', '#/admin/x', '#/onboarding', '#/zzz']) {
+    for (const h of ['#/', '#/ebook', '#/rekod', '#/admin/x', '#/onboarding', '#/zzz']) {
       expect(g(h, anon), h).toBe('#/masuk');
     }
-    for (const h of ['#/masuk', '#/daftar', '#/lupa']) expect(g(h, anon), h).toBeNull();
+    for (const h of ['#/masuk', '#/daftar', '#/lupa', '#/bantuan']) expect(g(h, anon), h).toBeNull();
   });
 
-  it('not onboarded -> #/onboarding', () => {
-    for (const h of ['#/', '#/ebook', '#/bantuan', '#/admin', '#/masuk', '#/daftar']) {
+  it('not onboarded -> #/onboarding for participant feature routes only', () => {
+    for (const h of ['#/', '#/ebook', '#/ebook/1', '#/tdee', '#/rekod', '#/cabaran', '#/akaun', '#/admin', '#/zzz']) {
       expect(g(h, fresh), h).toBe('#/onboarding');
     }
-    expect(g('#/onboarding', fresh)).toBeNull();
+    for (const h of ['#/onboarding', '#/bantuan', '#/masuk', '#/daftar', '#/lupa']) expect(g(h, fresh), h).toBeNull();
   });
 
   it('signed-in member leaves auth pages for home', () => {
     for (const h of ['#/masuk', '#/daftar', '#/lupa']) expect(g(h, member), h).toBe('#/');
-    for (const h of ['#/', '#/ebook/1', '#/rekod', '#/cabaran', '#/akaun/kod', '#/onboarding']) {
+    for (const h of ['#/', '#/ebook/1', '#/rekod', '#/cabaran', '#/akaun/kod', '#/onboarding', '#/bantuan']) {
       expect(g(h, member), h).toBeNull();
     }
   });
@@ -79,6 +79,7 @@ describe('guard', () => {
     expect(g('#/admin/kod', member)).toBe('#/');
     expect(g('#/admin/kod', admin)).toBeNull();
     expect(g('#/admin', coach)).toBeNull();
+    expect(g('#/bantuan', admin)).toBeNull();
   });
 
   it('session error: stays put (the app shows the error screen)', () => {

@@ -20,6 +20,11 @@ export function countdownParts(targetMs: number, nowMs: number) {
   };
 }
 
+/** Whole days left until the program starts (00:00 MYT): the same number the countdown grid shows. */
+export function daysLeft(startIso: string, nowMs: number): number {
+  return countdownParts(startInstant(startIso), nowMs).days;
+}
+
 type Pkg = { id: string; name: string; items: string[] };
 
 export function packageLabel(ent: Set<string>, packages: Pkg[]): { id: string; label: string } {

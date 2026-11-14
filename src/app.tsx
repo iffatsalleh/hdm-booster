@@ -1,5 +1,5 @@
 import { useEffect } from 'preact/hooks';
-import { guard, navigate, PUBLIC_ROUTES, useRoute, type Route } from './router';
+import { guard, navigate, OPEN_ROUTES, useRoute, type Route } from './router';
 import { signOut, startSession, refresh, useSession, type SessionState } from './state/session';
 import { ToastHost } from './ui/Toast';
 import { Empty } from './ui/Empty';
@@ -61,7 +61,7 @@ export function App() {
     if (redirect) navigate(redirect, true);
   }, [redirect]);
 
-  const pub = PUBLIC_ROUTES.has(route.name);
+  const pub = OPEN_ROUTES.has(route.name);
   let body;
   if (s.status === 'error' && !pub) body = <SessionError s={s} />;
   else if (redirect || (s.status === 'loading' && !pub)) body = <Loading />;

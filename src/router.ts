@@ -26,7 +26,10 @@ const TABLE: [RouteName, RegExp, string[]][] = [
   ['admin', /^\/admin(?:\/(.*))?$/, ['rest']],
 ];
 
+/** Auth pages: for signed-out users; a signed-in, onboarded user is sent home. */
 export const PUBLIC_ROUTES: ReadonlySet<RouteName> = new Set(['masuk', 'daftar', 'lupa']);
+/** Reachable by anyone, signed in or not, onboarded or not (no onboarding redirect). */
+export const OPEN_ROUTES: ReadonlySet<RouteName> = new Set(['masuk', 'daftar', 'lupa', 'bantuan']);
 export const STAFF_ROLES = ['superadmin', 'coach'];
 
 const safeDecode = (s: string) => {
@@ -62,10 +65,11 @@ export type GuardState = {
 /** Where to redirect for this route, or null to render it. */
 export function guard(route: Route, s: GuardState): string | null {
   if (s.status === 'loading' || s.status === 'error') return null;
-  const pub = PUBLIC_ROUTES.has(route.name);
-  if (s.status === 'anon') return pub ? null : '#/masuk';
-  if (!s.onboarded) return route.name === 'onboarding' ? null : '#/onboarding';
-  if (pub) return '#/';
+  const open = OPEN_ROUTES.has(route.name);
+  if (s.status === 'anon') return open ? null : '#/masuk';
+  if (route.name === 'bantuan') return null;
+  if (!s.onboarded) return open || route.name === 'onboarding' ? null : '#/onboarding';
+  if (PUBLIC_ROUTES.has(route.name)) return '#/';
   if (route.name === 'admin' && !s.roles.some((r) => STAFF_ROLES.includes(r))) return '#/';
   return null;
 }
