@@ -6,6 +6,31 @@
 - Key scopes: `read` (read-only txn), `dml` (rows only), `ddl` (owner-level). 429 on rate limit.
 - No usage/quota endpoint documented.
 
+## REST serialisation and permissions (docs re-read 14/11/2026)
+- `/query` runs one statement. A `read` key runs it in a read-only transaction.
+- Values come back as follows:
+  - `jsonb` and `json`: a **JSON string you must parse**
+  - arrays: **Postgres text form** such as `{red,blue}`
+  - `numeric`: a **string**
+  - timestamps: ISO 8601 strings
+  - ints, floats and bools: native JSON types
+- Whether `/query` rows are objects or arrays aligned to `columns` is not stated. The client handles both.
+- The `dml` key runs as "a role that owns nothing". Postgres refuses it CREATE, ALTER, DROP and TRUNCATE. The `read` and `ddl` keys act as the database owner, so a `read` key can read every table.
+- Cache: "Lists are cached for 5 minutes and cleared by any write through the API". This applies to `GET /{table}`. Whether `/query` is cached is not stated, so it must be probed. Writes made over the direct Postgres connection do not clear the cache.
+- Errors return `{error, code?, details?, hint?}`:
+
+  | Status | Meaning |
+  |---|---|
+  | 400 | bad request |
+  | 401 | missing or wrong key |
+  | 403 | wrong scope, or privilege refused |
+  | 404 | not found |
+  | 409 | conflict |
+  | 429 | rate limit or monthly quota |
+
+- `GET /rest/{db}/openapi.json` exists. No health or usage endpoint is documented.
+- **Worker rule:** every Worker query selects exactly one `jsonb` column (e.g. `select app_bootstrap($1) as r`, `select jsonb_build_object(...) as r`), and the client `JSON.parse`s it when it is a string. Do not select raw arrays or numerics.
+
 ## Direct Postgres connection (Free plan, confirmed 13/11/2026)
 - Database `hdm_prod` was created with a pooled connection string `my-pgsql-1.hornethive.io:6432`, `sslmode=require`. It is stored as `HIVE_PG_URL` in `.env.prod`, which is gitignored.
 - The connecting user owns the database (`pg_database.datdba = current_user`).
