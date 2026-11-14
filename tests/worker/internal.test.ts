@@ -63,6 +63,33 @@ describe('purchase', () => {
     expect(await q(`select 1 from email_queue where ref_id = (select id::text from purchases where order_ref = $1)`, [ref])).toHaveLength(1);
   });
 
+  test('paid_at from the body is stored when it parses; otherwise receipt time', async () => {
+    const base = { source: 'webhook', package_id: 'basic', name: 'P', email: `test_${rnd()}@example.test`, phone: randomPhone(), amount: 97 };
+    const withPaid = newRef();
+    expect((await icall('POST', '/internal/purchase', { ...base, order_ref: withPaid, paid_at: '2026-01-02T03:04:05.000Z' })).status).toBe(200);
+    const p1 = (await q('select paid_at from purchases where order_ref = $1', [withPaid]))[0].paid_at as Date;
+    expect(p1.toISOString()).toBe('2026-01-02T03:04:05.000Z');
+
+    for (const bad of [null, 'semalam', 12345]) {
+      const ref = newRef();
+      const before = Date.now();
+      expect((await icall('POST', '/internal/purchase', { ...base, order_ref: ref, paid_at: bad })).status).toBe(200);
+      const p = ((await q('select paid_at from purchases where order_ref = $1', [ref]))[0].paid_at as Date).getTime();
+      expect(p).toBeGreaterThanOrEqual(before - 1000);
+      expect(p).toBeLessThanOrEqual(Date.now() + 1000);
+    }
+  });
+
+  test('~50 KB signed purchase (full BCL transaction in raw) is accepted', async () => {
+    const ref = newRef();
+    const raw = { order_no: ref, notes: 'x'.repeat(50 * 1024) };
+    const res = await icall('POST', '/internal/purchase', {
+      order_ref: ref, source: 'poll', package_id: 'basic', name: 'P', email: `test_${rnd()}@example.test`, phone: randomPhone(), raw,
+    });
+    expect(res.status).toBe(200);
+    expect(await q('select 1 from purchases where order_ref = $1', [ref])).toHaveLength(1);
+  });
+
   test('missing order_ref -> 400', async () => {
     const res = await icall('POST', '/internal/purchase', { email: 'x@example.test' });
     expect(res.status).toBe(400);
@@ -145,8 +172,8 @@ describe('email queue', () => {
 });
 
 describe('body limit', () => {
-  test('internal body over 16 KB -> 413', async () => {
-    const res = await icall('POST', '/internal/bcl-log', { order_ref: 'x', kind: 'error', detail: 'a'.repeat(17 * 1024) });
+  test('internal body over 256 KB -> 413', async () => {
+    const res = await icall('POST', '/internal/bcl-log', { order_ref: 'x', kind: 'error', detail: 'a'.repeat(257 * 1024) });
     expect(res.status).toBe(413);
   });
 });

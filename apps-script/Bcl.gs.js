@@ -61,6 +61,7 @@ function processOrder(orderRef, source) {
     email: buyer.email,
     phone: buyer.phone,
     amount: isNaN(amount) ? null : amount,
+    paid_at: paidAtFromTxn(txn, fm), // null => Worker uses receipt time
     raw: txn
   });
   logBcl(orderRef, r && r.ok ? 'processed' : 'error', (r && (r.reason || '')) + ' (' + source + ')', r && r.ok ? null : txn);

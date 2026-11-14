@@ -11,7 +11,9 @@ import { publicRoutes } from './routes/public';
 import { adminRoutes, COACH_ROUTES } from './routes/admin';
 import { internalRoutes } from './routes/internal';
 
-const BODY_LIMIT = 16 * 1024;
+const API_BODY_LIMIT = 16 * 1024;
+/** Apps Script forwards the full BCL transaction (purchase.raw, bcl-log payload). */
+const INTERNAL_BODY_LIMIT = 256 * 1024;
 
 export function createApp(deps: Deps) {
   const app = new Hono<AppEnv>();
@@ -36,9 +38,9 @@ export function createApp(deps: Deps) {
   });
 
   // Request bodies are small JSON documents everywhere.
-  const limit = bodyLimit({ maxSize: BODY_LIMIT, onError: (c) => fail(c, 413, 'terlalu_besar') });
-  app.use('/api/*', limit);
-  app.use('/internal/*', limit);
+  const tooLarge = (c: Parameters<typeof fail>[0]) => fail(c, 413, 'terlalu_besar');
+  app.use('/api/*', bodyLimit({ maxSize: API_BODY_LIMIT, onError: tooLarge }));
+  app.use('/internal/*', bodyLimit({ maxSize: INTERNAL_BODY_LIMIT, onError: tooLarge }));
 
   // Admin boundary: EVERY /api/admin/* path (existing or not) needs a profile with the superadmin role,
   // except plain GETs of the coach read-only routes (COACH_ROUTES), which a coach may also call.

@@ -87,3 +87,32 @@ describe('normalisers mirror src/lib/phone.ts', () => {
   });
   it('email', () => expect(g.normalizeEmail('  Ali@Gmail.COM ')).toBe('ali@gmail.com'));
 });
+
+describe('paidAtFromTxn', () => {
+  it('ISO with offset -> ISO UTC', () => {
+    expect(g.paidAtFromTxn({ paid_at: '2026-11-14T10:00:00+08:00' }, fieldMap())).toBe('2026-11-14T02:00:00.000Z');
+  });
+  it('naive BCL datetime is Malaysia time (+08:00)', () => {
+    expect(g.paidAtFromTxn({ paid_at: '2026-11-14 10:30:00' }, fieldMap())).toBe('2026-11-14T02:30:00.000Z');
+  });
+  it('falls back through payment_date then updated_at', () => {
+    expect(g.paidAtFromTxn({ payment_date: '2026-11-14 08:00:00', updated_at: '2026-11-15 08:00:00' }, fieldMap()))
+      .toBe('2026-11-14T00:00:00.000Z');
+    expect(g.paidAtFromTxn({ updated_at: '2026-11-15T00:00:00Z' }, fieldMap())).toBe('2026-11-15T00:00:00.000Z');
+  });
+  it('epoch seconds and milliseconds', () => {
+    expect(g.paidAtFromTxn({ paid_at: 1800000000 }, fieldMap())).toBe(new Date(1800000000 * 1000).toISOString());
+    expect(g.paidAtFromTxn({ paid_at: '1800000000000' }, fieldMap())).toBe(new Date(1800000000000).toISOString());
+  });
+  it('missing / unparseable -> null', () => {
+    expect(g.paidAtFromTxn({}, fieldMap())).toBeNull();
+    expect(g.paidAtFromTxn({ paid_at: 'semalam' }, fieldMap())).toBeNull();
+    expect(g.paidAtFromTxn(null, fieldMap())).toBeNull();
+  });
+  it('BCL_FIELD_MAP paid_at overrides the candidate paths', () => {
+    const fm = g.resolveFieldMap(JSON.stringify({ paid_at: ['data.paid_on'] }));
+    expect(g.paidAtFromTxn({ paid_at: '2020-01-01T00:00:00Z', data: { paid_on: '2026-11-14T00:00:00Z' } }, fm))
+      .toBe('2026-11-14T00:00:00.000Z');
+    expect(g.defaultFieldMap().paid_at).toEqual(['paid_at', 'payment_date', 'updated_at']);
+  });
+});

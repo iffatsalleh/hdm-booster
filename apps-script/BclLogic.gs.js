@@ -10,6 +10,7 @@ function defaultFieldMap() {
     phone: ['custom_fields_data.phone', 'custom_fields_data.telefon', 'main_data.phone', 'customer.phone', 'phone'],
     amount: ['amount', 'total', 'total_amount', 'main_data.amount'],
     formable_id: ['formable_id', 'form_id', 'main_data.formable_id'],
+    paid_at: ['paid_at', 'payment_date', 'updated_at'],
     field_value: []
   };
 }
@@ -86,6 +87,27 @@ function buyerFromTxn(txn, fieldMap) {
     email: normalizeEmail(_pick(txn, fm.email)),
     phone: normalizePhone(_pick(txn, fm.phone))
   };
+}
+
+/**
+ * Payment time as an ISO string (UTC), or null. Accepts ISO with offset, epoch seconds / milliseconds, and the
+ * naive "YYYY-MM-DD HH:MM[:SS]" form, which is taken as Malaysia time (+08:00) since BCL is a Malaysian platform.
+ */
+function paidAtFromTxn(txn, fieldMap) {
+  if (!txn || typeof txn !== 'object') return null;
+  var v = _pick(txn, (fieldMap || defaultFieldMap()).paid_at);
+  if (v === null) return null;
+  var s = String(v).trim();
+  var ms;
+  if (/^\d{9,13}$/.test(s)) {
+    ms = Number(s);
+    if (s.length <= 10) ms *= 1000;
+  } else {
+    var naive = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/.exec(s);
+    ms = Date.parse(naive ? naive[1] + 'T' + naive[2] + '+08:00' : s);
+  }
+  if (isNaN(ms)) return null;
+  return new Date(ms).toISOString();
 }
 
 /**
