@@ -9,3 +9,5 @@ node_modules/
 .env.test
 apps-script/.clasprc.json
 .env.prod
+
+.superdesign/tmp/
