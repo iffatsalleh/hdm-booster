@@ -1,4 +1,4 @@
-﻿import { readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import vm from 'node:vm';
 import { resolve } from 'node:path';
@@ -26,8 +26,8 @@ function makeUtilities() {
 }
 
 /** Load pure GAS files (Hmac, BclLogic) into one vm context and return its globals. */
-export function loadGas(files: string[] = ['Hmac.gs.js', 'BclLogic.gs.js']): Record<string, any> {
-  const ctx = vm.createContext({ Utilities: makeUtilities(), JSON, Math, Number, String, Object, Array, RegExp, parseFloat, isNaN });
+export function loadGas(files: string[] = ['Hmac.gs.js', 'BclLogic.gs.js'], extras: Record<string, any> = {}): Record<string, any> {
+  const ctx = vm.createContext({ Logger: { log: () => {} }, ...extras, Utilities: makeUtilities(), JSON, Math, Number, String, Object, Array, RegExp, parseFloat, isNaN });
   for (const f of files) vm.runInContext(readFileSync(resolve(GAS_DIR, f), 'utf8').replace(/^\uFEFF/, ''), ctx, { filename: f });
   return ctx as Record<string, any>;
 }
