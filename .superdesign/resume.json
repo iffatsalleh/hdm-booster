@@ -21,8 +21,78 @@
       },
       "components": [],
       "drafts": {
-        "d2053a30-ebfd-4477-9a77-d37f779d1e47": { "title": "Utama (Home)", "device": "mobile", "model": "gemini-3.1-pro", "note": "light theme + navy hero, countdown, shortcut cards, upgrade nudge, bottom tab bar" }
+        "d2053a30-ebfd-4477-9a77-d37f779d1e47": {
+          "title": "Utama (Home)",
+          "device": "mobile",
+          "model": "gemini-3.1-pro",
+          "note": "light theme + navy hero, countdown, shortcut cards, upgrade nudge, bottom tab bar"
+        },
+        "bffa9408-ee93-484a-9c9c-e98fbd3cf316": {
+          "title": "Daftar",
+          "device": "mobile",
+          "flowFrom": "d2053a30-ebfd-4477-9a77-d37f779d1e47"
+        },
+        "990518bc-f5d2-4c90-994a-7d1855ac2669": {
+          "title": "Log Masuk",
+          "device": "mobile",
+          "flowFrom": "d2053a30-ebfd-4477-9a77-d37f779d1e47"
+        },
+        "cc6c3957-6ddc-411d-b93c-a02c31624afa": {
+          "title": "Lupa Kata Laluan",
+          "device": "mobile",
+          "flowFrom": "d2053a30-ebfd-4477-9a77-d37f779d1e47"
+        },
+        "da6b678f-7825-47cd-b1de-d52c249e5bd4": {
+          "title": "Onboarding",
+          "device": "mobile",
+          "flowFrom": "d2053a30-ebfd-4477-9a77-d37f779d1e47"
+        }
+      }
+    },
+    "/admin": {
+      "targetKind": "new-target",
+      "projectId": "bc4e8298-f2ba-4bac-b174-bbb1c88304cc",
+      "activeDraftId": "3aea0aae-f267-4611-bdd9-c6fb5c850351",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        ".superdesign/init/theme.md:1:40",
+        "tailwind.config.js",
+        "src/styles.css"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "9e2f4e1dd9c236487b6e2ca8bf30ec9047673516ed0d2196093d98b56288e2a8",
+        ".superdesign/init/theme.md": "9d64bd855c7821267ce83bd6302b71b00e32cf35bdc132fe0eaa2818f9b4116b",
+        "tailwind.config.js": "803a2cee5762e8b39137f9264d3bcd8bf202c195c8c7bf6d0a9e9a4d5b5cafb5",
+        "src/styles.css": "db37e692d0a7e934278cdc469b68d6f6326d1a89623757557caf14e01826499d"
+      },
+      "components": [],
+      "drafts": {
+        "3aea0aae-f267-4611-bdd9-c6fb5c850351": {
+          "title": "Admin Ringkasan",
+          "device": "desktop",
+          "model": "gemini-3.1-pro"
+        }
       }
     }
+  },
+  "pending": {
+    "note": "Out of Superdesign credits 14/11/2026",
+    "participant": [
+      "Library Ebook",
+      "Pembaca Ebook",
+      "Kalkulator TDEE",
+      "Group Support",
+      "Akaun",
+      "Bantuan"
+    ],
+    "admin": [
+      "Admin Pembelian",
+      "Admin Kod Akses",
+      "Admin Peserta",
+      "Admin Pemetaan BCL",
+      "Admin Kandungan",
+      "Admin Export & Audit"
+    ]
   }
 }
