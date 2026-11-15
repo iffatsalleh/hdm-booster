@@ -165,3 +165,16 @@ export function percentile(values, p) {
   const rank = Math.ceil((p / 100) * s.length);
   return s[Math.min(s.length, Math.max(1, rank)) - 1];
 }
+
+/**
+ * spawnSync options for a command. Only the npm/npx .cmd shims need a shell on Windows; with a shell, Node joins
+ * arguments with spaces unquoted, so args containing spaces or shell characters are refused there. Everything
+ * else (git, real .exe files) runs without a shell, so each argument arrives intact.
+ */
+export function spawnPlan(cmd, args, platform = process.platform) {
+  const shell = platform === 'win32' && (cmd === 'npm' || cmd === 'npx');
+  if (shell && args.some((a) => !/^[A-Za-z0-9_.:/=@-]+$/.test(a))) {
+    throw new Error(`${cmd}: argumen tidak selamat untuk shell Windows: ${JSON.stringify(args)}`);
+  }
+  return { cmd, args, shell };
+}

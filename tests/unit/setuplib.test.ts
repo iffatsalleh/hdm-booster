@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import {
   randomSecret, mergeEnv, findPlaceholders, tomlValue, originProblems, validateServiceAccount, isFirebaseUid,
-  normalizePhone, parseArgs, mytYmd, nextTag, parseGithubRemote, cdnUrls, sigHeader, percentile,
+  normalizePhone, parseArgs, mytYmd, nextTag, parseGithubRemote, cdnUrls, sigHeader, percentile, spawnPlan,
 } from '../../scripts/setuplib.mjs';
 import { normalizePhone as appNormalizePhone } from '../../src/lib/phone';
 import { signHmac, verifySigHeader } from '../../worker/src/hmac';
@@ -141,5 +142,23 @@ describe('sigHeader', () => {
     const body = JSON.stringify({ table: 'items', limit: 1 });
     expect(sigHeader('s3cret', t, body)).toBe(`t=${t},v1=${await signHmac('s3cret', t, body)}`);
     expect(await verifySigHeader('s3cret', sigHeader('s3cret', t, body), body, t + 10)).toBe(true);
+  });
+});
+
+describe('spawnPlan (deploy/setup child processes)', () => {
+  it('git never uses a shell, so a commit message with spaces stays one argument', () => {
+    expect(spawnPlan('git', ['commit', '-m', 'build: dist v20261115-1', '--', 'dist'], 'win32')).toEqual({
+      cmd: 'git', args: ['commit', '-m', 'build: dist v20261115-1', '--', 'dist'], shell: false,
+    });
+    const plan = spawnPlan('git', ['rev-parse', '--sq-quote', 'build: dist a b c']);
+    const r = spawnSync(plan.cmd, plan.args, { encoding: 'utf8', shell: plan.shell });
+    expect(r.status).toBe(0);
+    expect(r.stdout.trim()).toBe("'build: dist a b c'");
+  });
+  it('npm/npx use a shell only on Windows and refuse args a shell would split', () => {
+    expect(spawnPlan('npx', ['wrangler', 'secret', 'put', 'INTERNAL_SECRET'], 'win32').shell).toBe(true);
+    expect(spawnPlan('npm', ['run', 'build'], 'linux').shell).toBe(false);
+    expect(() => spawnPlan('npm', ['run', 'a b'], 'win32')).toThrow();
+    expect(() => spawnPlan('npx', ['x&calc'], 'win32')).toThrow();
   });
 });

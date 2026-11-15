@@ -5,15 +5,15 @@
 //     --push    also runs `git push origin HEAD --tags` (jsDelivr only sees pushed tags)
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parseArgs, mytYmd, nextTag, parseGithubRemote, cdnUrls } from './setuplib.mjs';
+import { parseArgs, mytYmd, nextTag, parseGithubRemote, cdnUrls, spawnPlan } from './setuplib.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const { flags } = parseArgs(process.argv.slice(2), ['worker', 'push']);
-const win = process.platform === 'win32';
 
 function run(cmd, args, opts = {}) {
   console.log(`\n> ${cmd} ${args.join(' ')}`);
-  const r = spawnSync(cmd, args, { cwd: ROOT, stdio: 'inherit', shell: win, ...opts });
+  const plan = spawnPlan(cmd, args);
+  const r = spawnSync(plan.cmd, plan.args, { cwd: ROOT, stdio: 'inherit', shell: plan.shell, ...opts });
   if (r.status !== 0) {
     console.error(`\nGAGAL: ${cmd} ${args.join(' ')} (kod ${r.status}). Tiada apa-apa ditolak.`);
     process.exit(1);
@@ -21,7 +21,8 @@ function run(cmd, args, opts = {}) {
 }
 
 function out(cmd, args) {
-  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', shell: win });
+  const plan = spawnPlan(cmd, args);
+  const r = spawnSync(plan.cmd, plan.args, { cwd: ROOT, encoding: 'utf8', shell: plan.shell });
   return r.status === 0 ? r.stdout.trim() : '';
 }
 

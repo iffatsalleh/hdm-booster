@@ -14,3 +14,4 @@ export function parseGithubRemote(url: string): { owner: string; repo: string } 
 export function cdnUrls(owner: string, repo: string, tag: string): { js: string; css: string };
 export function sigHeader(secret: string, t: number, body: string): string;
 export function percentile(values: number[], p: number): number;
+export function spawnPlan(cmd: string, args: string[], platform?: string): { cmd: string; args: string[]; shell: boolean };

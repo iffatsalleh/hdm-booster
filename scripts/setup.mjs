@@ -13,7 +13,7 @@ import pg from 'pg';
 import { parseEnv } from './hive.mjs';
 import {
   randomSecret, mergeEnv, findPlaceholders, tomlValue, originProblems, validateServiceAccount, isFirebaseUid,
-  normalizePhone, parseArgs,
+  normalizePhone, parseArgs, spawnPlan,
 } from './setuplib.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -55,11 +55,12 @@ function envProd() {
 
 /** `npx wrangler secret put NAME` in worker/, value piped through stdin (never echoed). */
 function wranglerSecretPut(name, value) {
-  const r = spawnSync('npx', ['wrangler', 'secret', 'put', name], {
+  const plan = spawnPlan('npx', ['wrangler', 'secret', 'put', name]);
+  const r = spawnSync(plan.cmd, plan.args, {
     cwd: WORKER_DIR,
     input: value,
     stdio: ['pipe', 'inherit', 'inherit'],
-    shell: process.platform === 'win32',
+    shell: plan.shell,
   });
   if (r.status !== 0) die(`wrangler secret put ${name} gagal (kod ${r.status}). Sudah "npx wrangler login"?`);
   console.log(`OK  ${name} disimpan sebagai secret Worker`);
