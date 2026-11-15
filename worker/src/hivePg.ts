@@ -13,6 +13,8 @@ export interface PgClientLike {
   connect(): Promise<unknown>;
   query(sql: string, params?: unknown[]): Promise<{ rows: unknown[] }>;
   end(): Promise<unknown>;
+  /** pg emits 'error' for background connection failures; without a listener the error is thrown. */
+  on?(event: 'error', listener: (err: unknown) => void): unknown;
 }
 export type PgClientFactory = (connectionString: string) => PgClientLike;
 
@@ -52,6 +54,13 @@ export function createPgHive(
     if (closed) return Promise.reject(new Error('hive: closed'));
     if (!ready) {
       const c = factory(connectionString);
+      // A background connection error (e.g. socket drop between queries) must not crash the isolate.
+      // Log one generic line only: pg errors can carry the host, SQL or parameters.
+      c.on?.('error', (e) => {
+        if (closed) return; // socket teardown after close(): expected, not worth a log line
+        const code = errCode(e);
+        console.error(`hive: connection error${code ? ` [${code}]` : ''}`);
+      });
       ready = c.connect().then(
         () => c,
         async (e) => {

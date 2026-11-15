@@ -12,6 +12,9 @@ compatibility_flags = ["nodejs_compat"]
 # (PgBouncer transaction mode, port 6432, sslmode=require). Create it with query caching DISABLED:
 #   npx wrangler hyperdrive create hdm-db --connection-string="<HIVE_PG_URL>" --caching-disabled
 # then put the printed id below. Remove this block to fall back to the REST API (needs HIVE_DML_KEY).
+# Local `wrangler dev` with this block needs a local Postgres string: either add
+#   localConnectionString = "postgres://..."   (never commit a real one)
+# here, or set the env var CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE before `npx wrangler dev`.
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id = "REPLACE_WITH_HYPERDRIVE_ID"
@@ -21,5 +24,7 @@ id = "REPLACE_WITH_HYPERDRIVE_ID"
 HIVE_API_BASE = "https://api.hornethive.io/v1"
 HIVE_DB_ID = "REPLACE_WITH_DB_ID"
 FIREBASE_PROJECT_ID = "REPLACE_WITH_FIREBASE_PROJECT_ID"
-ALLOWED_ORIGINS = "https://REPLACE.blogspot.com,http://localhost:5173"
+# Prod: the Blogspot origin ONLY (scheme + host, no path, no trailing slash). Comma-separate extra origins
+# (e.g. a custom domain). Do not add http://localhost here for the deployed Worker.
+ALLOWED_ORIGINS = "https://REPLACE.blogspot.com"
 GAS_URL = "REPLACE_WITH_GAS_WEBAPP_URL"

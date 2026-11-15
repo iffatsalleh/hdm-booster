@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' b:templateVersion='1.0.0' lang='ms' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+<head>
+<!--
+  HDM BOOSTER - tema Blogger (Tema > Edit HTML > padam semua > tampal fail ini > Simpan).
+  Ganti SEMUA nilai GANTI_... di bawah. Semua nilai di sini awam (bukan rahsia).
+  Selepas setiap "node scripts/deploy.mjs", tukar tag @v... pada DUA baris app.css dan app.js.
+-->
+<meta charset='UTF-8'/>
+<meta content='width=device-width, initial-scale=1' name='viewport'/>
+<meta content='#ffffff' name='theme-color'/>
+<title>HDM BOOSTER</title>
+<b:skin><![CDATA[
+/* Tiada gaya Blogger: aplikasi membawa CSS sendiri (app.css). */
+html, body { margin: 0; padding: 0; background: #ffffff; }
+.hdm-hidden { display: none !important; }
+]]></b:skin>
+<link href='https://fonts.googleapis.com' rel='preconnect'/>
+<link crossorigin='anonymous' href='https://fonts.gstatic.com' rel='preconnect'/>
+<link href='https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&amp;family=Quicksand:wght@400;500;600;700&amp;family=Inter:wght@800;900&amp;family=Gloria+Hallelujah&amp;display=swap' rel='stylesheet'/>
+<link href='https://unpkg.com/@phosphor-icons/web@2.1.2/src/regular/style.css' rel='stylesheet'/>
+<link href='https://unpkg.com/@phosphor-icons/web@2.1.2/src/bold/style.css' rel='stylesheet'/>
+<link href='https://unpkg.com/@phosphor-icons/web@2.1.2/src/fill/style.css' rel='stylesheet'/>
+<!-- GANTI_GITHUB_USER dan GANTI_TAG (contoh v20261115-1): baris ini dan baris app.js di bawah -->
+<link href='https://cdn.jsdelivr.net/gh/GANTI_GITHUB_USER/hdm-booster@GANTI_TAG/dist/app.css' rel='stylesheet'/>
+</head>
+<body>
+<!-- Blogger memerlukan sekurang-kurangnya satu b:section. Ia disembunyikan dan tidak memaparkan apa-apa. -->
+<b:section class='hdm-hidden' id='hdm-hidden' maxwidgets='1' showaddelement='no'/>
+<div id='app'></div>
+<script>
+//<![CDATA[
+window.HDM_CONFIG = {
+  firebase: {
+    apiKey: 'GANTI_FIREBASE_API_KEY',
+    authDomain: 'GANTI_FIREBASE_PROJECT_ID.firebaseapp.com',
+    projectId: 'GANTI_FIREBASE_PROJECT_ID'
+  },
+  apiUrl: 'https://hdm-api.GANTI_AKAUN_CLOUDFLARE.workers.dev',
+  gasUrl: 'https://script.google.com/macros/s/GANTI_ID_DEPLOYMENT_APPS_SCRIPT/exec'
+};
+//]]>
+</script>
+<script src='https://cdn.jsdelivr.net/gh/GANTI_GITHUB_USER/hdm-booster@GANTI_TAG/dist/app.js' type='module'></script>
+</body>
+</html>

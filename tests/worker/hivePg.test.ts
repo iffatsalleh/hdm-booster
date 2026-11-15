@@ -1,5 +1,5 @@
 // Unit tests for the Hyperdrive Postgres Hive (worker/src/hivePg.ts) with a fake pg Client: no database needed.
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { createPgHive, type PgClientLike } from '../../worker/src/hivePg';
 
 type Call = { sql: string; params: unknown[] };
@@ -101,5 +101,38 @@ describe('createPgHive', () => {
     await hive.json('s').catch(() => {});
     expect(state.created).toBe(2);
     await hive.close();
+  });
+
+  test("registers an 'error' listener that logs one generic line (no SQL, params or connection string)", async () => {
+    const listeners: ((e: unknown) => void)[] = [];
+    const factory = (): PgClientLike => ({
+      async connect() {},
+      async query() {
+        return { rows: [{ r: 1 }] };
+      },
+      async end() {},
+      on(event: 'error', fn: (e: unknown) => void) {
+        if (event === 'error') listeners.push(fn);
+      },
+    });
+    const hive = createPgHive('postgres://user:pw@host:6432/db', factory);
+    await hive.json('select secret_fn($1) as r', ['secret-param']);
+    expect(listeners).toHaveLength(1);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(() =>
+        listeners[0](Object.assign(new Error('terminated postgres://user:pw@host select secret_fn'), { code: '57P01' })),
+      ).not.toThrow();
+      expect(spy).toHaveBeenCalledTimes(1);
+      const line = spy.mock.calls[0].map(String).join(' ');
+      expect(line).toBe('hive: connection error [57P01]');
+      for (const leak of ['pw', 'secret', 'host']) expect(line).not.toContain(leak);
+      // after close(), socket teardown errors are expected: swallowed without a log line
+      await hive.close();
+      expect(() => listeners[0](new Error('Connection terminated'))).not.toThrow();
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

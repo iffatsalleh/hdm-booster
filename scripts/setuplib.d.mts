@@ -1,0 +1,16 @@
+export function randomSecret(): string;
+export function mergeEnv(text: string, updates: Record<string, string>): string;
+export const OPTIONAL_PLACEHOLDERS: string[];
+export function findPlaceholders(toml: string): { key: string; line: number; optional: boolean }[];
+export function tomlValue(toml: string, key: string): string | null;
+export function originProblems(value: string): string[];
+export function validateServiceAccount(sa: unknown): { ok: boolean; errors: string[]; projectId?: string; clientEmail?: string };
+export function isFirebaseUid(uid: unknown): boolean;
+export function normalizePhone(raw: string): string | null;
+export function parseArgs(argv: string[], booleans?: string[]): { flags: Record<string, string | true>; positional: string[] };
+export function mytYmd(date?: Date): string;
+export function nextTag(existing: string[], ymd: string): string;
+export function parseGithubRemote(url: string): { owner: string; repo: string } | null;
+export function cdnUrls(owner: string, repo: string, tag: string): { js: string; css: string };
+export function sigHeader(secret: string, t: number, body: string): string;
+export function percentile(values: number[], p: number): number;

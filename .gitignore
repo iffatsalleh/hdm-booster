@@ -12,3 +12,5 @@ apps-script/.clasprc.json
 
 .superdesign/tmp/
 worker/.dryrun/
+worker/.wrangler/
+.dev.vars
