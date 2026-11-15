@@ -84,9 +84,11 @@ export function guard(route: Route, s: GuardState): string | null {
     return open ? null : '#/masuk';
   }
   if (route.name === 'bantuan') return null;
-  if (!s.onboarded) return open || route.name === 'onboarding' ? null : '#/onboarding';
+  const staff = s.roles.some((r) => STAFF_ROLES.includes(r));
+  // staff may use #/admin/* before (or without) onboarding; participant routes still require it
+  if (!s.onboarded && !(staff && route.name === 'admin')) return open || route.name === 'onboarding' ? null : '#/onboarding';
   if (PUBLIC_ROUTES.has(route.name)) return route.query?.next === 'aktif' ? '#/aktif' : '#/';
-  if (route.name === 'admin' && !s.roles.some((r) => STAFF_ROLES.includes(r))) return '#/';
+  if (route.name === 'admin' && !staff) return '#/';
   return null;
 }
 

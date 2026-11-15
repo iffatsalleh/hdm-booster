@@ -82,6 +82,20 @@ describe('guard', () => {
     expect(g('#/bantuan', admin)).toBeNull();
   });
 
+  it('staff are exempt from the onboarding redirect on #/admin/* only', () => {
+    const freshAdmin: GuardState = { status: 'ready', onboarded: false, roles: ['superadmin'] };
+    const freshCoach: GuardState = { status: 'ready', onboarded: false, roles: ['coach'] };
+    expect(g('#/admin', freshAdmin)).toBeNull();
+    expect(g('#/admin/peserta/abc', freshAdmin)).toBeNull();
+    expect(g('#/admin/kod', freshCoach)).toBeNull();
+    for (const h of ['#/', '#/ebook', '#/rekod', '#/akaun']) {
+      expect(g(h, freshAdmin), h).toBe('#/onboarding');
+      expect(g(h, freshCoach), h).toBe('#/onboarding');
+    }
+    // non-staff, not onboarded: admin still goes to onboarding first
+    expect(g('#/admin', fresh)).toBe('#/onboarding');
+  });
+
   it('session error: stays put (the app shows the error screen)', () => {
     expect(g('#/', { status: 'error', onboarded: false, roles: [] })).toBeNull();
   });

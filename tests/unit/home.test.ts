@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { countdownParts, daysLeft, startInstant, packageLabel, ebookStats, firstName, initials, phaseIndex } from '../../src/lib/home';
+import { countdownParts, daysLeft, heroMode, startInstant, packageLabel, ebookStats, firstName, initials, phaseIndex } from '../../src/lib/home';
 
 const packages = [
   { id: 'basic', name: 'Pakej Basic', items: ['ebook_strategi', 'graduation', 'group_hdm', 'sistem', 'tdee'] },
@@ -87,5 +87,24 @@ describe('phaseIndex', () => {
   });
   it('after the end highlights all', () => {
     expect(phaseIndex(phases, '2027-04-01')).toBe(2);
+  });
+});
+
+describe('heroMode (countdown -> Minggu X / Y switch)', () => {
+  const b = { program_start: '2026-12-10', program_end: '2027-03-10' };
+  const start = Date.parse('2026-12-10T00:00:00+08:00');
+  it('no batch', () => {
+    expect(heroMode(null, start)).toEqual({ mode: 'none' });
+  });
+  it('one second before start: countdown at 0 days 00:00:01', () => {
+    const m = heroMode(b, start - 1000);
+    expect(m.mode).toBe('countdown');
+    expect(m.mode === 'countdown' && m.c).toEqual({ days: 0, hours: 0, minutes: 0, seconds: 1, done: false });
+  });
+  it('the instant the countdown reaches zero: Minggu 1 / 13', () => {
+    expect(heroMode(b, start)).toEqual({ mode: 'week', week: 1, total: 13 });
+  });
+  it('later weeks', () => {
+    expect(heroMode(b, Date.parse('2026-12-17T00:00:00+08:00'))).toEqual({ mode: 'week', week: 2, total: 13 });
   });
 });

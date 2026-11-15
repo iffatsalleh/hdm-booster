@@ -1,17 +1,12 @@
 import type { RouteName } from '../router';
-
-const TABS: { href: string; label: string; icon: string; match: RouteName[] }[] = [
-  { href: '#/', label: 'Utama', icon: 'house', match: ['home'] },
-  { href: '#/rekod', label: 'Rekod', icon: 'note-pencil', match: ['rekod'] },
-  { href: '#/ebook', label: 'Ebook', icon: 'books', match: ['ebook', 'ebook_read'] },
-  { href: '#/cabaran', label: 'Cabaran', icon: 'trophy', match: ['cabaran'] },
-  { href: '#/akaun', label: 'Akaun', icon: 'user-circle', match: ['akaun', 'akaun_kod', 'aktif'] },
-];
+import { tabsFor } from '../lib/nav';
+import { useSession } from '../state/session';
 
 export function TabBar(p: { active: RouteName }) {
+  const tabs = tabsFor(useSession().roles);
   return (
-    <nav class="tabbar" aria-label="Navigasi utama">
-      {TABS.map((t) => {
+    <nav class="tabbar" aria-label="Navigasi utama" style={`--tabs:${tabs.length}`}>
+      {tabs.map((t) => {
         const on = t.match.includes(p.active);
         return (
           <a key={t.href} class={on ? 'on' : undefined} href={t.href} aria-current={on ? 'page' : undefined}>

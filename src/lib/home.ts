@@ -1,5 +1,5 @@
 // Pure helpers for the home screen (unit-tested).
-import type { BatchDates } from './dates';
+import { programWeek, todayMYT, type BatchDates } from './dates';
 
 const DAY = 86_400_000;
 
@@ -60,4 +60,18 @@ export function phaseIndex(phases: BatchDates['phases'], today: string): number 
     if (p.start <= today) idx = i;
   });
   return idx;
+}
+
+export type HeroMode =
+  | { mode: 'none' }
+  | { mode: 'countdown'; c: ReturnType<typeof countdownParts> }
+  | { mode: 'week'; week: number; total: number };
+
+/** One clock tick decides the hero: countdown until it reaches zero, then "Minggu X / Y" at that same instant. */
+export function heroMode(b: { program_start: string; program_end: string } | null, nowMs: number): HeroMode {
+  if (!b) return { mode: 'none' };
+  const c = countdownParts(startInstant(b.program_start), nowMs);
+  if (!c.done) return { mode: 'countdown', c };
+  const w = programWeek({ programStart: b.program_start, programEnd: b.program_end, phases: [] }, todayMYT(new Date(nowMs)));
+  return { mode: 'week', week: w?.week ?? 1, total: w?.total ?? 1 };
 }

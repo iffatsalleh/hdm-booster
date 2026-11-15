@@ -17,3 +17,6 @@
 @keyframes spin{to{transform:rotate(360deg)}}
 .toast-host{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;width:calc(100% - 32px);max-width:398px;z-index:30;pointer-events:none}
 .toast{box-shadow:0 12px 30px rgba(15,23,42,.18);pointer-events:auto}
+/* Tab count varies (Admin tab for staff): hdm.css hardcodes 5 columns. */
+.tabbar{grid-template-columns:repeat(var(--tabs,5),minmax(0,1fr))}
+.tabbar a{min-width:0;white-space:nowrap}

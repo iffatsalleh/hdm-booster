@@ -4,8 +4,8 @@ import { Card, HealthNote } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { LockBadge } from '../ui/LockBadge';
 import { setting, useSession, type Batch } from '../state/session';
-import { countdownParts, ebookStats, firstName, packageLabel, phaseIndex, startInstant } from '../lib/home';
-import { formatDMY, programWeek, todayMYT } from '../lib/dates';
+import { countdownParts, ebookStats, firstName, heroMode, packageLabel, phaseIndex } from '../lib/home';
+import { formatDMY, todayMYT } from '../lib/dates';
 import { fillTemplate, waLink } from '../lib/wa';
 import { DEFAULT_SUPPORT_WA } from '../lib/config';
 
@@ -21,9 +21,7 @@ function useNow(ms = 1000) {
   return now;
 }
 
-function Countdown({ batch }: { batch: Batch }) {
-  const now = useNow();
-  const c = countdownParts(startInstant(batch.program_start), now);
+function Countdown({ c }: { c: ReturnType<typeof countdownParts> }) {
   const cells: [string, string, boolean][] = [
     [String(c.days), 'Hari', false],
     [pad(c.hours), 'Jam', false],
@@ -47,23 +45,23 @@ function Countdown({ batch }: { batch: Batch }) {
 }
 
 function Hero({ batch, name }: { batch: Batch | null; name: string }) {
-  const now = useNow(60_000);
+  // one 1 s clock drives the countdown, the switch to "Minggu X / Y" and the phase bars
+  const now = useNow(1000);
   const today = todayMYT(new Date(now));
-  const started = !!batch && today >= batch.program_start;
-  const week = batch && started ? programWeek({ programStart: batch.program_start, programEnd: batch.program_end, phases: batch.phases }, today) : null;
+  const m = heroMode(batch, now);
   const pi = batch ? phaseIndex(batch.phases ?? [], today) : -1;
   return (
     <section class="hero">
       <i class="ph-fill ph-moon-stars moon" aria-hidden="true" />
       {batch ? <span class="pill-t"><i class="ph-fill ph-moon-stars" aria-hidden="true" /> {batch.name}</span> : null}
       <h1 style="font-size:24px;margin:14px 0 4px">Assalamualaikum{name ? `, ${name}` : ''}</h1>
-      {!batch ? (
+      {m.mode === 'none' ? (
         <p class="small">Maklumat batch akan dipaparkan di sini apabila tersedia.</p>
-      ) : !started ? (
-        <Countdown batch={batch} />
+      ) : m.mode === 'countdown' ? (
+        <Countdown c={m.c} />
       ) : (
         <div class="glass" style="padding:12px;text-align:center;margin-top:10px">
-          <span class="num" style="font-size:28px;color:var(--yellow)">Minggu {week?.week ?? 1} / {week?.total ?? 13}</span>
+          <span class="num" style="font-size:28px;color:var(--yellow)">Minggu {m.week} / {m.total}</span>
         </div>
       )}
       {batch?.phases?.length ? (
