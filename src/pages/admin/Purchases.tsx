@@ -1,7 +1,7 @@
 // #/admin/pembelian — admin_purchases list (status tabs incl. "Perlu semakan", batch, search) and row actions:
 // set_package, assign, cancel (confirm), restore, reprocess (Apps Script), resend welcome, WhatsApp (belum_dituntut).
 import { useEffect, useState } from 'preact/hooks';
-import { appUrl, buildQuery, dateTimeMYT, purchaseWaText } from '../../lib/admin';
+import { appUrl, buildQuery, dateTimeMYT, listTotal, purchaseWaText } from '../../lib/admin';
 import { waLink } from '../../lib/wa';
 import { useSession } from '../../state/session';
 import { Button } from '../../ui/Button';
@@ -34,6 +34,7 @@ export function Purchases(p: { query?: Record<string, string> }) {
 
   // links such as #/admin/pembelian?status=perlu_semakan (Ringkasan) pick the tab
   useEffect(() => setStatus(p.query?.status ?? ''), [p.query?.status]);
+  useEffect(() => setQ(p.query?.q ?? ''), [p.query?.q]);
   const tab = setStatus;
 
   const action = async (row: Row, action: string, payload: Row = {}, okText = 'Pembelian dikemas kini.') => {
@@ -107,7 +108,9 @@ export function Purchases(p: { query?: Record<string, string> }) {
                   <tr key={String(r.id)}>
                     <td><span class="mono">{String(r.order_ref)}</span></td>
                     <td><b>{String(r.buyer_name ?? '—')}</b>{r.claimed_by ? <div><a class="small" href={`#/admin/peserta/${encodeURIComponent(String(r.claimed_by))}`}>Lihat peserta</a></div> : null}</td>
-                    <td>{String(r.email ?? '—')}</td>
+                    <td>{String(r.email ?? '—')}{r.squatter_suspect ? (
+                      <div style="margin-top:4px"><span class="badge red" title="Belum dituntut lebih 24 jam, tetapi ada akaun lain berdaftar dengan emel ini">
+                        <i class="ph-fill ph-warning" aria-hidden="true" /> Akaun lain guna emel ini</span></div>) : null}</td>
                     <td>{String(r.phone ?? '—')}</td>
                     <td><PkgBadge id={r.package_id} name={r.package_name} /></td>
                     <td class="num">{r.amount_rm != null ? `RM${r.amount_rm}` : '—'}</td>
@@ -121,7 +124,7 @@ export function Purchases(p: { query?: Record<string, string> }) {
             {!list.data.length ? <p class="small muted" style="padding:16px 0">Tiada pembelian.</p> : null}
           </div>
         ) : null}
-        {list.data ? <div class="pager"><span>{list.data.length} pembelian{list.data.length >= 200 ? ' (had 200 terkini)' : ''}</span></div> : null}
+        {list.data ? <div class="pager"><span>{list.data.length < listTotal(list.data) ? `${list.data.length} terkini daripada ${listTotal(list.data)} pembelian (guna carian / Export untuk semua)` : `${list.data.length} pembelian`}</span></div> : null}
       </div>
 
       {pkgFor ? (

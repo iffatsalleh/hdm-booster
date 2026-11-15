@@ -163,3 +163,89 @@ describe('grants, listings, audit', () => {
     expect(d.purchases[0]).not.toHaveProperty('raw');
   });
 });
+
+describe('0006 admin extras', () => {
+  const whRefs: string[] = [];
+  const codeLabels: string[] = [];
+  afterAll(async () => {
+    await q('delete from bcl_webhook_log where order_ref = any($1::text[])', [whRefs]);
+    await q('delete from access_codes where batch_label = any($1::text[])', [codeLabels]);
+  });
+
+  test('admin_summary: webhook_errors (superadmin only, no payload) and email_queue counts', async () => {
+    const admin = await withRole('superadmin');
+    const coach = await withRole('coach');
+    const bad = `test_wh_${rnd()}`;
+    const good = `test_wh_${rnd()}`;
+    whRefs.push(bad, good);
+    await q(`insert into bcl_webhook_log (order_ref, kind, ok, message, payload, at) values
+             ($1, 'error', false, 'Telefon tidak sah', '{"secret":1}'::jsonb, now() + interval '1 hour'),
+             ($2, 'ok', true, 'diterima', '{}'::jsonb, now() + interval '1 hour')`, [bad, good]);
+    const s = (await q('select admin_summary($1) as r', [admin]))[0].r;
+    const refsSeen = s.webhook_errors.map((w: any) => w.order_ref);
+    expect(refsSeen).toContain(bad);
+    expect(refsSeen).not.toContain(good);
+    expect(s.webhook_errors.length).toBeLessThanOrEqual(10);
+    expect(Object.keys(s.webhook_errors[0]).sort()).toEqual(['at', 'kind', 'message', 'order_ref']);
+    expect(typeof s.email_queue.pending).toBe('number');
+    expect(typeof s.email_queue.failed).toBe('number');
+    const c = (await q('select admin_summary($1) as r', [coach]))[0].r;
+    expect(c.webhook_errors).toEqual([]);
+    expect(typeof c.email_queue.failed).toBe('number');
+  });
+
+  test('admin_purchases.squatter_suspect: unclaimed > 24 h with an account on the same email', async () => {
+    const admin = await withRole('superadmin');
+    const u = await profile();
+    const email = `${u}@example.test`;
+    const marker = `test_sq_${rnd()}`;
+    const ins = async (suffix: string, mail: string, status: string, hoursAgo: number) => {
+      const ref = `${marker}_${suffix}`;
+      refs.push(ref);
+      await q(`insert into purchases (order_ref, email, status, created_at) values ($1, $2, $3, now() - make_interval(hours => $4))`,
+        [ref, mail, status, hoursAgo]);
+      return ref;
+    };
+    const old = await ins('old', email.toUpperCase(), 'belum_dituntut', 25);
+    const fresh1 = await ins('fresh', email, 'belum_dituntut', 1);
+    const other = await ins('other', `nobody_${rnd()}@example.test`, 'belum_dituntut', 25);
+    const claimed = await ins('claimed', email, 'dituntut', 25);
+    const rows = (await q('select admin_purchases($1,$2::jsonb) as r', [admin, JSON.stringify({ q: marker })]))[0].r as any[];
+    const flag = Object.fromEntries(rows.map((r) => [r.order_ref, r.squatter_suspect]));
+    expect(flag).toEqual({ [old]: true, [fresh1]: false, [other]: false, [claimed]: false });
+  });
+
+  test('offset paging + total on participants, purchases, codes', async () => {
+    const admin = await withRole('superadmin');
+    const marker = `Pg${rnd()}`;
+    for (let i = 0; i < 3; i++) await profile(`${marker} ${i}`);
+    const p0 = (await q('select admin_participants($1,$2,0) as r', [admin, marker]))[0].r as any[];
+    const p1 = (await q('select admin_participants($1,$2,1) as r', [admin, marker]))[0].r as any[];
+    expect(p0).toHaveLength(3);
+    expect(p0.every((r) => Number(r.total) === 3)).toBe(true);
+    expect(p1.map((r) => r.id)).toEqual(p0.slice(1).map((r) => r.id));
+    expect((await q('select admin_participants($1,$2,3) as r', [admin, marker]))[0].r).toEqual([]);
+    expect((await q('select admin_participants($1,$2) as r', [admin, marker]))[0].r).toHaveLength(3);
+
+    const pm = `test_pg_${rnd()}`;
+    for (let i = 0; i < 3; i++) {
+      refs.push(`${pm}_${i}`);
+      await q('insert into purchases (order_ref) values ($1)', [`${pm}_${i}`]);
+    }
+    const pu = async (offset: unknown) =>
+      (await q('select admin_purchases($1,$2::jsonb) as r', [admin, JSON.stringify({ q: pm, offset })]))[0].r as any[];
+    expect((await pu(0)).map((r) => Number(r.total))).toEqual([3, 3, 3]);
+    expect((await pu(2)).map((r) => r.order_ref)).toEqual([(await pu(0))[2].order_ref]);
+    expect(await pu(5)).toEqual([]);
+    expect(await pu('x')).toHaveLength(3); // bad offset -> 0
+
+    const label = `test_pgc_${rnd()}`;
+    codeLabels.push(label);
+    await q('select count(*) from generate_codes($1,$2,3,null,$3)', [admin, 'basic', label]);
+    const co = async (offset: number) =>
+      (await q('select admin_codes($1,$2::jsonb) as r', [admin, JSON.stringify({ q: label, offset })]))[0].r as any[];
+    expect((await co(0)).map((r) => Number(r.total))).toEqual([3, 3, 3]);
+    expect(await co(1)).toHaveLength(2);
+    expect(await co(3)).toEqual([]);
+  });
+});

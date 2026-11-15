@@ -280,6 +280,7 @@ export function Select(p: { id: string; label?: string; value: string; onChange:
 /** Text search that reports after 300 ms of no typing. */
 export function SearchBox(p: { placeholder: string; value: string; onSearch: (v: string) => void }) {
   const [v, setV] = useState(p.value);
+  useEffect(() => setV(p.value), [p.value]); // value changed from outside (e.g. a #/admin/pembelian?q= link)
   useEffect(() => {
     if (v === p.value) return;
     const t = setTimeout(() => p.onSearch(v), 300);

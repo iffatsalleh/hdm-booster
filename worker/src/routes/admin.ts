@@ -36,6 +36,12 @@ const filterOf = (c: Context, keys: string[]) => {
   return f;
 };
 
+/** `?offset=` paging for the admin lists: absent → 0, a non-negative integer → it, anything else → null (400). */
+export function parseOffset(v: string | undefined): number | null {
+  if (v === undefined || v === '') return 0;
+  return /^\d{1,9}$/.test(v) ? Number(v) : null;
+}
+
 export function adminRoutes(deps: Deps) {
   const r = new Hono<AppEnv>();
   const sa = requireRole('superadmin');
@@ -54,7 +60,11 @@ export function adminRoutes(deps: Deps) {
   r.get('/summary', async (c) => run(c, async () => ok(c, await deps.hive.json('select admin_summary($1) as r', [actor(c)]))));
 
   r.get('/participants', async (c) =>
-    run(c, async () => ok(c, await deps.hive.json('select admin_participants($1, $2) as r', [actor(c), filterOf(c, ['q']).q ?? null]))));
+    run(c, async () => {
+      const offset = parseOffset(c.req.query('offset'));
+      if (offset === null) return fail(c, 400, 'data_tidak_sah');
+      return ok(c, await deps.hive.json('select admin_participants($1, $2, $3::int) as r', [actor(c), filterOf(c, ['q']).q ?? null, offset]));
+    }));
 
   r.get('/participants/:uid', async (c) =>
     run(c, async () => {
@@ -104,7 +114,9 @@ export function adminRoutes(deps: Deps) {
     run(c, async () => {
       const f = filterOf(c, ['status', 'batch_id', 'q']);
       if (f.batch_id && !UUID_RE.test(f.batch_id)) return fail(c, 400, 'data_tidak_sah');
-      return ok(c, await deps.hive.json('select admin_purchases($1, $2::jsonb) as r', [actor(c), JSON.stringify(f)]));
+      const offset = parseOffset(c.req.query('offset'));
+      if (offset === null) return fail(c, 400, 'data_tidak_sah');
+      return ok(c, await deps.hive.json('select admin_purchases($1, $2::jsonb) as r', [actor(c), JSON.stringify({ ...f, offset })]));
     }));
 
   r.post('/purchases/:id/action', sa, async (c) =>
@@ -244,7 +256,9 @@ export function adminRoutes(deps: Deps) {
     run(c, async () => {
       const f = filterOf(c, ['status', 'batch_id', 'q']);
       if (f.batch_id && !UUID_RE.test(f.batch_id)) return fail(c, 400, 'data_tidak_sah');
-      return ok(c, await deps.hive.json('select admin_codes($1, $2::jsonb) as r', [actor(c), JSON.stringify(f)]));
+      const offset = parseOffset(c.req.query('offset'));
+      if (offset === null) return fail(c, 400, 'data_tidak_sah');
+      return ok(c, await deps.hive.json('select admin_codes($1, $2::jsonb) as r', [actor(c), JSON.stringify({ ...f, offset })]));
     }));
 
   r.post('/codes/:id/action', sa, async (c) =>

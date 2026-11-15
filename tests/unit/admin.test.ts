@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   adminError, appUrl, buildQuery, canMutate, canView, codeWaText, codesCsvRows, codesExportRows, codesFilename,
-  CONFIRM_ACTIONS, dateMYT, dateTimeMYT, dmyMYT, exportFilename, needsConfirm, parseAdminPath, participantsCsvRows,
+  CONFIRM_ACTIONS, dateMYT, fetchAllPages, listTotal, dateTimeMYT, dmyMYT, exportFilename, needsConfirm, parseAdminPath, participantsCsvRows,
   purchaseWaText, purchasesCsvRows, SECTIONS, slugLabel, toLocalInput, fromLocalInput, visibleSections,
 } from '../../src/lib/admin';
 import { ApiError } from '../../src/lib/errors';
@@ -176,5 +176,41 @@ describe('adminError', () => {
   });
   it('other errors keep the Worker BM message', () => {
     expect(adminError(new ApiError('kod_tidak_wujud', 'Kod tidak dijumpai.', 404))).toBe('Kod tidak dijumpai.');
+  });
+});
+
+describe('fetchAllPages (offset paging until total)', () => {
+  const rows = (n: number, total: number, from = 0) => Array.from({ length: n }, (_, i) => ({ id: from + i, total }));
+  it('pages through 450 rows in 200-row pages', async () => {
+    const calls: number[] = [];
+    const all = await fetchAllPages(async (offset) => {
+      calls.push(offset);
+      return rows(Math.min(200, 450 - offset), 450, offset);
+    });
+    expect(calls).toEqual([0, 200, 400]);
+    expect(all).toHaveLength(450);
+    expect(all[449].id).toBe(449);
+  });
+  it('one call when everything fits; stops on an empty page', async () => {
+    const calls: number[] = [];
+    expect(await fetchAllPages(async (o) => { calls.push(o); return rows(3, 3); })).toHaveLength(3);
+    expect(calls).toEqual([0]);
+    expect(await fetchAllPages(async () => [])).toEqual([]);
+    // total says more but the server returns nothing: stop instead of looping
+    let n = 0;
+    const r = await fetchAllPages(async (o) => { n++; return o === 0 ? rows(200, 999) : []; });
+    expect(r).toHaveLength(200);
+    expect(n).toBe(2);
+  });
+  it('rows without total (older server) stop on a short page', async () => {
+    const calls: number[] = [];
+    const r = await fetchAllPages(async (o) => { calls.push(o); return o === 0 ? Array.from({ length: 200 }, (_, i) => ({ id: i })) : [{ id: 200 }]; });
+    expect(r).toHaveLength(201);
+    expect(calls).toEqual([0, 200]);
+  });
+  it('listTotal reads the total column, else the row count', () => {
+    expect(listTotal([{ total: '450' }])).toBe(450);
+    expect(listTotal([{ id: 1 }, { id: 2 }])).toBe(2);
+    expect(listTotal([])).toBe(0);
   });
 });

@@ -21,9 +21,11 @@ type State = {
   seq: number;
   /** entitlements a fixture account has outside purchases / codes / grants (first seen) */
   base: Record<string, string[]>;
+  webhook_log: Row[];
+  email_queue: { pending: number; failed: number };
 };
 
-const K = 'hdm_mock_admin_v1';
+const K = 'hdm_mock_admin_v2';
 const uuid = (n: number) => `00000000-0000-4000-9000-${String(n).padStart(12, '0')}`;
 const iso = (s: string) => new Date(s).toISOString();
 
@@ -41,6 +43,13 @@ function seed(): State {
   return {
     seq: 1000,
     base: { 'mock-ali': [], 'mock-coach': [] },
+    webhook_log: [
+      { at: iso('2026-11-14T01:42:00Z'), order_ref: 'BCL-10422', kind: 'error', ok: false, message: 'Telefon tidak sah: "0123"' },
+      { at: iso('2026-11-14T00:15:00Z'), order_ref: 'BCL-10411', kind: 'error', ok: false, message: 'Jumlah RM147 tiada padanan pakej' },
+      { at: iso('2026-11-13T14:03:00Z'), order_ref: 'BCL-10390', kind: 'skipped', ok: false, message: 'Tiada batch dibuka pada tarikh bayar' },
+      { at: iso('2026-11-13T11:20:00Z'), order_ref: 'BCL-10398', kind: 'ok', ok: true, message: 'Order direkod' },
+    ],
+    email_queue: { pending: 2, failed: 1 },
     purchases: [
       P(1, { order_ref: 'BCL-10293', package_id: 'basic', buyer_name: 'Ali Bin Abu', email: 'ali@gmail.com', phone: '60123456789',
         amount_rm: 100, paid_at: iso('2026-11-12T02:00:00Z'), status: 'dituntut', claimed_by: 'mock-ali', claimed_at: iso('2026-11-13T02:00:00Z') }),
@@ -51,6 +60,8 @@ function seed(): State {
         review_reason: 'Jumlah RM147 tiada padanan pakej' }),
       P(4, { order_ref: 'BCL-10422', package_id: 'complete', buyer_name: 'Nurul Huda', email: 'huda.nur@gmail.com', phone: '0123',
         amount_rm: 150, paid_at: iso('2026-11-14T01:42:00Z'), status: 'perlu_semakan', review_reason: 'Telefon tidak sah: "0123"' }),
+      P(6, { order_ref: 'BCL-10388', package_id: 'complete', buyer_name: 'Ahmad K.', email: 'Ahmad@gmail.com', phone: '60198765432',
+        amount_rm: 150, paid_at: iso('2026-11-11T03:00:00Z'), status: 'belum_dituntut' }),
       P(5, { order_ref: 'BCL-10426', package_id: 'complete', buyer_name: 'Farah Nabilah', email: 'farahn@gmail.com', phone: '60143326618',
         amount_rm: 150, paid_at: iso('2026-11-14T03:00:00Z'), status: 'dibatalkan' }),
     ],
@@ -170,6 +181,10 @@ export function adminMock<T>(method: string, fullPath: string, body: unknown, me
     return v as unknown as T;
   };
   const m = (re: RegExp) => re.exec(path);
+  // ?offset= paging like the Worker (bad value -> 400), 200 rows per page, `total` on every row
+  const off = query.offset ?? '0';
+  if (!/^\d{1,9}$/.test(off)) fail(400, 'data_tidak_sah', 'Maklumat tidak lengkap atau tidak sah.');
+  const page = (rows: Row[]) => rows.slice(Number(off), Number(off) + 200).map((r) => ({ ...r, total: rows.length }));
   let x: RegExpExecArray | null;
 
   if (method === 'GET' && path === '/api/admin/summary') {
@@ -180,13 +195,16 @@ export function adminMock<T>(method: string, fullPath: string, body: unknown, me
       purchases: count(st.purchases),
       codes: count(db.codes().map(codeRow)),
       perlu_semakan: st.purchases.filter((p) => p.status === 'perlu_semakan').length,
+      webhook_errors: sa ? st.webhook_log.filter((w) => w.ok === false || w.kind === 'ralat' || w.kind === 'error').slice(0, 10)
+        .map(({ at, order_ref, kind, message }) => ({ at, order_ref, kind, message })) : [],
+      email_queue: st.email_queue,
     });
   }
   if (method === 'GET' && path === '/api/admin/participants') {
     for (const a of db.accounts()) recompute(a.uid);
-    return out(db.accounts().filter((a) => like(query.q, a.full_name, a.email, a.phone))
+    return out(page(db.accounts().filter((a) => like(query.q, a.full_name, a.email, a.phone))
       .map((a) => ({ id: a.uid, full_name: a.full_name, email: a.email, phone: a.phone, onboarded_at: a.onboarded_at,
-        created_at: '2026-11-13T02:00:00.000Z', entitlements: a.entitlements })));
+        created_at: '2026-11-13T02:00:00.000Z', entitlements: a.entitlements }))));
   }
   if (method === 'GET' && (x = m(/^\/api\/admin\/participants\/([^/]+)$/))) {
     recompute(x[1]);
@@ -231,11 +249,14 @@ export function adminMock<T>(method: string, fullPath: string, body: unknown, me
 
   // ---------------- purchases ----------------
   if (method === 'GET' && path === '/api/admin/purchases') {
-    return out(st.purchases
+    const emails = new Set(db.accounts().map((a) => a.email.toLowerCase()));
+    return out(page(st.purchases
       .filter((p) => (!query.status || p.status === query.status) && (!query.batch_id || p.batch_id === query.batch_id)
         && like(query.q, p.order_ref, p.buyer_name, p.email, p.phone))
-      .map((p): Row => ({ ...p, package_name: pkgName(p.package_id) }))
-      .sort((p, q) => String(q.created_at).localeCompare(String(p.created_at))));
+      .map((p): Row => ({ ...p, package_name: pkgName(p.package_id),
+        squatter_suspect: p.status === 'belum_dituntut' && Date.parse(String(p.created_at)) < Date.now() - 864e5
+          && emails.has(String(p.email ?? '').trim().toLowerCase()) }))
+      .sort((p, q) => String(q.created_at).localeCompare(String(p.created_at)))));
   }
   if (method === 'POST' && (x = m(/^\/api\/admin\/purchases\/([^/]+)\/(action|reprocess|resend-welcome)$/))) {
     const p = st.purchases.find((y) => y.id === x![1]);
@@ -295,10 +316,10 @@ export function adminMock<T>(method: string, fullPath: string, body: unknown, me
     return out(list.map(codeRow));
   }
   if (method === 'GET' && path === '/api/admin/codes') {
-    return out(db.codes().map(codeRow)
+    return out(page(db.codes().map(codeRow)
       .filter((c) => (!query.status || c.status === query.status) && (!query.batch_id || c.batch_id === query.batch_id)
         && like(query.q, c.code, c.buyer_name, c.buyer_email, c.batch_label, c.redeemed_by))
-      .sort((p, q) => String(q.created_at).localeCompare(String(p.created_at))));
+      .sort((p, q) => String(q.created_at).localeCompare(String(p.created_at)))));
   }
   if (method === 'POST' && (x = m(/^\/api\/admin\/codes\/([^/]+)\/action$/))) {
     const c = db.codes().find((y) => codeRow(y).id === x![1]);

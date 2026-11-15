@@ -1,7 +1,7 @@
 // #/admin/peserta (+ /:uid detail drawer) — coach + superadmin may read; only superadmin sees grant / revoke /
 // reset password. The temporary password is shown once (component state only, never stored).
 import { useState } from 'preact/hooks';
-import { buildQuery, canMutate, dateMYT, dateTimeMYT } from '../../lib/admin';
+import { buildQuery, canMutate, dateMYT, dateTimeMYT, listTotal } from '../../lib/admin';
 import { birthYearToAge } from '../../lib/onboarding';
 import { initials, packageLabel } from '../../lib/home';
 import { waLink } from '../../lib/wa';
@@ -56,7 +56,7 @@ export function Participants(p: { uid?: string }) {
               {!list.data.length ? <p class="small muted" style="padding:16px 0">Tiada peserta.</p> : null}
             </div>
           ) : null}
-          {list.data ? <div class="pager"><span>{list.data.length} peserta{list.data.length >= 200 ? ' (had 200 terkini; guna carian)' : ''}</span></div> : null}
+          {list.data ? <div class="pager"><span>{list.data.length < listTotal(list.data) ? `${list.data.length} terkini daripada ${listTotal(list.data)} peserta (guna carian / Export untuk semua)` : `${list.data.length} peserta`}</span></div> : null}
         </div>
         {p.uid ? <ParticipantDrawer key={p.uid} uid={p.uid} readOnly={readOnly} onChanged={() => void list.reload()} /> : null}
       </div>

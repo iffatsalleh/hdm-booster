@@ -69,6 +69,39 @@ describe('coach access', () => {
   });
 });
 
+describe('summary extras and list paging (0006)', () => {
+  test('summary: superadmin gets webhook_errors + email_queue; coach gets counts but no webhook rows', async () => {
+    const sa = (await (await call(app, 'GET', '/api/admin/summary', { uid: SA })).json()).data;
+    expect(Array.isArray(sa.webhook_errors)).toBe(true);
+    expect(typeof sa.email_queue.pending).toBe('number');
+    expect(typeof sa.email_queue.failed).toBe('number');
+    const co = (await (await call(app, 'GET', '/api/admin/summary', { uid: COACH })).json()).data;
+    expect(co.webhook_errors).toEqual([]);
+    expect(typeof co.email_queue.pending).toBe('number');
+  });
+
+  test('offset: validated integer >= 0 on purchases / participants / codes', async () => {
+    for (const base of ['/api/admin/purchases', '/api/admin/participants', '/api/admin/codes']) {
+      for (const bad of ['-1', 'abc', '1.5', '1e3']) {
+        const res = await call(app, 'GET', `${base}?offset=${bad}`, { uid: SA });
+        expect(res.status, `${base} ${bad}`).toBe(400);
+        expect((await res.json()).reason).toBe('data_tidak_sah');
+      }
+      const page = await call(app, 'GET', `${base}?offset=0`, { uid: SA });
+      expect(page.status, base).toBe(200);
+      const rows = (await page.json()).data as any[];
+      expect(Array.isArray(rows)).toBe(true);
+      if (rows.length) expect(Number(rows[0].total)).toBeGreaterThanOrEqual(rows.length);
+      const far = await call(app, 'GET', `${base}?offset=999999999`, { uid: SA });
+      expect((await far.json()).data).toEqual([]);
+    }
+    const one = await call(app, 'GET', `/api/admin/participants?q=${encodeURIComponent(P)}&offset=0`, { uid: COACH });
+    expect(((await one.json()).data as any[]).map((r) => r.id)).toEqual([P]);
+    const rows = (await (await call(app, 'GET', '/api/admin/purchases', { uid: SA })).json()).data as any[];
+    if (rows.length) expect(typeof rows[0].squatter_suspect).toBe('boolean');
+  });
+});
+
 describe('content CRUD', () => {
   test('content/:table outside whitelist -> 404; column outside whitelist ignored', async () => {
     for (const t of ['profiles', 'user_roles', 'audit_logs', 'purchases', 'bcl_form_map', 'items;drop']) {

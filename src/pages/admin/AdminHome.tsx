@@ -1,5 +1,5 @@
 // #/admin — Ringkasan: admin_summary tiles (coach + superadmin), perlu-semakan list (superadmin), Hyperdrive info.
-import { isSuperadmin } from '../../lib/admin';
+import { dateTimeMYT, isSuperadmin } from '../../lib/admin';
 import { useSession } from '../../state/session';
 import { Button } from '../../ui/Button';
 import { adminApi, AdminShell, ErrorBox, Loading, useLoad, type Row } from './ui';
@@ -10,6 +10,9 @@ type Summary = {
   purchases: Record<string, number>;
   codes: Record<string, number>;
   perlu_semakan: number;
+  /** last 10 failed BCL webhooks (superadmin; [] for coach) */
+  webhook_errors?: { at: string; order_ref: string | null; kind: string | null; message: string | null }[];
+  email_queue?: { pending: number; failed: number };
 };
 
 const n = (v: number | undefined) => (v ?? 0).toLocaleString('en-US');
@@ -97,6 +100,35 @@ export function AdminHome() {
                 <Button href="#/admin/peserta" sm variant="outline" icon="ph ph-users-three">Buka senarai peserta</Button>
               </div>
             )}
+          </section>
+
+          <section class="cols">
+            {sa ? (
+              <div class="card">
+                <div class="card-h"><h2>Ralat webhook BCL terkini</h2><span class={'badge ' + (d.webhook_errors?.length ? 'red' : 'green')}>{d.webhook_errors?.length ?? 0}</span></div>
+                {(d.webhook_errors ?? []).map((w, i) => (
+                  <div class="li" key={i}>
+                    <div style="min-width:0">
+                      <div class="small subtle">{dateTimeMYT(w.at)}</div>
+                      <b class="num" style="font-size:13px">{w.order_ref ?? '—'}</b> <span class="small muted" style="overflow-wrap:anywhere">{w.message ?? ''}</span>
+                    </div>
+                    <div class="row" style="gap:6px;flex:none">
+                      <span class="chip" style="color:var(--red-d)">{w.kind ?? 'ralat'}</span>
+                      {w.order_ref ? <Button sm variant="outline" href={`#/admin/pembelian?q=${encodeURIComponent(w.order_ref)}`}>Semak</Button> : null}
+                    </div>
+                  </div>
+                ))}
+                {!d.webhook_errors?.length ? <p class="small muted">Tiada ralat webhook.</p> : null}
+              </div>
+            ) : null}
+            <div class="card">
+              <div class="card-h"><h2>Emel</h2><span class="badge grey"><i class="ph ph-envelope-simple" aria-hidden="true" /> Gmail</span></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div style="background:var(--yellow-t);border-radius:14px;padding:14px"><div class="small" style="font-weight:700;color:#854d0e">Belum dihantar</div><div class="num" style="font-size:30px">{n(d.email_queue?.pending)}</div></div>
+                <div style="background:var(--red-t);border-radius:14px;padding:14px"><div class="small" style="font-weight:700;color:var(--red-d)">Gagal</div><div class="num" style="font-size:30px;color:var(--red-d)">{n(d.email_queue?.failed)}</div></div>
+              </div>
+              <p class="small muted" style="margin-top:12px">{sa ? 'Emel alu-aluan boleh dihantar semula dari menu tindakan setiap pembelian.' : 'Baris gilir emel diurus oleh superadmin.'}</p>
+            </div>
           </section>
         </>
       ) : null}

@@ -196,3 +196,28 @@ export function adminError(e: unknown): string {
   if (e instanceof ApiError && e.status === 403) return NO_PERMISSION;
   return bm(e);
 }
+
+// ---------------- paging ----------------
+/** Page size of admin_participants / admin_purchases / admin_codes. */
+export const PAGE_SIZE = 200;
+
+/** Size of the whole filtered list: the `total` column every row carries (0006), else the row count. */
+export function listTotal(rows: Record<string, unknown>[]): number {
+  const t = Number(rows[0]?.total);
+  return Number.isFinite(t) && t >= rows.length ? t : rows.length;
+}
+
+/** Fetches every page (`?offset=`) until `total` is reached, an empty page, or a short page without `total`. */
+export async function fetchAllPages<T extends Record<string, unknown>>(
+  fetchPage: (offset: number) => Promise<T[]>, maxPages = 1000,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 0; page < maxPages; page++) {
+    const rows = await fetchPage(all.length);
+    if (!rows.length) break;
+    all.push(...rows);
+    const total = Number(rows[0].total);
+    if (Number.isFinite(total) ? all.length >= total : rows.length < PAGE_SIZE) break;
+  }
+  return all;
+}

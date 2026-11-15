@@ -2,7 +2,7 @@
 // row actions: cancel / release (confirm), reactivate, transfer, set items, extend.
 import { useMemo, useState } from 'preact/hooks';
 import {
-  appUrl, buildQuery, codesCsvRows, codesFilename, codeWaText, dateMYT, dateTimeMYT, fromLocalInput,
+  appUrl, buildQuery, codesCsvRows, codesFilename, codeWaText, dateMYT, dateTimeMYT, fromLocalInput, listTotal,
 } from '../../lib/admin';
 import { waLink } from '../../lib/wa';
 import { useSession } from '../../state/session';
@@ -112,7 +112,7 @@ export function Codes() {
               {!list.data.length ? <p class="small muted" style="padding:16px 0">Tiada kod.</p> : null}
             </div>
           ) : null}
-          {list.data ? <div class="pager"><span>{list.data.length} kod{list.data.length >= 200 ? ' (had 200 terkini)' : ''}</span></div> : null}
+          {list.data ? <div class="pager"><span>{list.data.length < listTotal(list.data) ? `${list.data.length} terkini daripada ${listTotal(list.data)} kod (guna carian / Export untuk semua)` : `${list.data.length} kod`}</span></div> : null}
         </div>
       </div>
 

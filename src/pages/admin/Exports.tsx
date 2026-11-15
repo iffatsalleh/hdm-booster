@@ -1,12 +1,9 @@
 // #/admin/export — CSV of participants, purchases and codes from the admin list endpoints (toCsv, MYT dates).
 import { useState } from 'preact/hooks';
-import { codesExportRows, exportFilename, participantsCsvRows, purchasesCsvRows } from '../../lib/admin';
+import { codesExportRows, exportFilename, fetchAllPages, participantsCsvRows, purchasesCsvRows } from '../../lib/admin';
 import { Button } from '../../ui/Button';
 import { toast } from '../../ui/Toast';
 import { act, adminApi, AdminShell, downloadCsv, useLoad, type Row } from './ui';
-
-/** The list endpoints return at most this many rows (newest first) and take no page parameter. */
-const SERVER_CAP = 200;
 
 type Kind = 'peserta' | 'pembelian' | 'kod';
 const CARDS: { kind: Kind; title: string; icon: string; text: string; path: string; rows: (l: Row[]) => Record<string, unknown>[] }[] = [
@@ -32,12 +29,12 @@ export function Exports() {
 
   const run = async (c: (typeof CARDS)[number]) => {
     setBusy(c.kind);
-    const list = await act(() => adminApi<Row[]>('GET', c.path));
+    // every page (?offset=) until the server's total is reached
+    const list = await act(() => fetchAllPages((offset) => adminApi<Row[]>('GET', `${c.path}?offset=${offset}`)));
     setBusy(null);
     if (!list) return;
     downloadCsv(exportFilename(c.kind), c.rows(list));
-    if (list.length >= SERVER_CAP) toast(`Hanya ${SERVER_CAP} rekod terkini dieksport (had pelayan).`, 'yellow', 7000);
-    else toast(`${list.length} rekod dieksport.`, 'green');
+    toast(`${list.length} rekod dieksport.`, 'green');
   };
 
   return (
@@ -52,7 +49,7 @@ export function Exports() {
           </div>
         ))}
       </section>
-      <p class="small muted" style="margin-top:12px">Tarikh dalam fail mengikut waktu Malaysia (MYT). Setiap senarai mengandungi sehingga {SERVER_CAP} rekod terkini.</p>
+      <p class="small muted" style="margin-top:12px">Tarikh dalam fail mengikut waktu Malaysia (MYT). Fail mengandungi semua rekod.</p>
     </AdminShell>
   );
 }
