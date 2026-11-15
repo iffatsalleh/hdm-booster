@@ -19,6 +19,7 @@ import { Codes } from './pages/account/Codes';
 import { Aktif } from './pages/Aktif';
 import { Library } from './pages/ebooks/Library';
 import { Reader } from './pages/ebooks/Reader';
+import { Admin } from './pages/admin/Admin';
 
 function Loading() {
   return (
@@ -62,6 +63,7 @@ function Page({ route }: { route: Route }) {
     case 'aktif': return <Aktif />;
     case 'ebook': return <Library />;
     case 'ebook_read': return <Reader key={route.params.id} id={route.params.id} />;
+    case 'admin': return <Admin route={route} />;
     case 'tiada': return <NotFound />;
     default: return <Placeholder route={route.name} />;
   }

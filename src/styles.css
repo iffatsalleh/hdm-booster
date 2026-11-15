@@ -20,3 +20,78 @@
 /* Tab count varies (Admin tab for staff): hdm.css hardcodes 5 columns. */
 .tabbar{grid-template-columns:repeat(var(--tabs,5),minmax(0,1fr))}
 .tabbar a{min-width:0;white-space:nowrap}
+
+/* ---------- Admin menu (Task 16): app-only additions to the mockup admin shell ---------- */
+.adm .side-nav{display:flex;flex-direction:column;gap:6px}
+.adm .side .foot a{cursor:pointer}
+.adm .tabs{overflow-x:auto;scrollbar-width:none}
+.adm .tabs button{padding:10px 14px;font:700 15px 'Quicksand',Arial,sans-serif;color:var(--muted);background:none;border:0;border-bottom:2.5px solid transparent;margin-bottom:-1px;cursor:pointer;white-space:nowrap}
+.adm .tabs button.on{color:var(--blue);border-color:var(--blue)}
+.adm .search{min-width:280px;flex:1}
+.adm .search input{border:0;outline:0;background:transparent;font:600 14px 'Quicksand',Arial,sans-serif;color:var(--text);width:100%;min-width:0}
+.adm .search:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px rgba(37,99,235,.15)}
+.adm select.input{appearance:auto;cursor:pointer}
+.adm .card,.adm .stat{min-width:0}
+/* sr-only (position:absolute) headers must not escape the scrolling table box and widen the page */
+.adm .tbl-wrap{position:relative}
+.adm .kebab{cursor:pointer;flex:none}
+.adm button.kebab{font-size:16px}
+.adm tr.clickable{cursor:pointer}
+.adm table.t th,.adm table.t .mono,.adm table.t .badge{white-space:nowrap}
+.adm .drawer{border-radius:18px;border:1px solid var(--line);align-self:start;position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}
+.adm .drawer .dh{font-size:15px;margin:16px 0 6px}
+.adm .peserta-grid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
+.adm .peserta-grid.has-detail{grid-template-columns:minmax(0,1fr) 420px}
+.adm .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.adm .grid3>.card+.card{margin-top:0}
+.adm .linkbtn{background:none;border:0;color:var(--blue);font:700 13px 'Quicksand',Arial,sans-serif;cursor:pointer;padding:0}
+.adm .pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:#f8fafc;border-radius:8px;padding:8px;max-width:420px}
+.adm code{font-family:'Inter',monospace;font-size:12px;background:#f1f5f9;border-radius:6px;padding:1px 5px}
+.adm .check input{width:18px;height:18px;flex:none;margin-top:1px;accent-color:var(--blue)}
+.adm .field+.field,.adm .field+.check{margin-top:14px}
+.modal-back{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:40;display:grid;place-items:center;padding:16px}
+.modal{background:#fff;border-radius:18px;box-shadow:var(--sh-hero);padding:20px;width:100%;max-width:440px;max-height:calc(100vh - 32px);overflow:auto;outline:0}
+.modal.wide{max-width:680px}
+.modal .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.modal .form-grid .field,.modal .form-grid .field+.field{margin-top:14px}
+.modal .form-grid .span2{grid-column:1/-1}
+.modal .sheet{display:flex;flex-direction:column;gap:4px}
+.modal .sheet button{display:flex;gap:10px;align-items:center;padding:12px;border-radius:10px;border:0;background:none;color:var(--text);font:600 15px 'Quicksand',Arial,sans-serif;cursor:pointer;text-align:left;min-height:44px}
+.modal .sheet button:hover{background:var(--page)}
+.modal .sheet button.danger{color:var(--red)}
+.modal .sheet i{font-size:20px}
+.modal .pick{display:block;width:100%;text-align:left;padding:10px;border-radius:10px;border:1px solid var(--line);background:#fff;margin-top:6px;cursor:pointer;font:600 14px 'Quicksand',Arial,sans-serif}
+.modal .pick:hover{border-color:var(--blue);background:var(--blue-t)}
+.modal .search{display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--subtle)}
+.modal .search input{border:0;outline:0;font:600 15px 'Quicksand',Arial,sans-serif;width:100%;min-width:0}
+.modal .check input{width:18px;height:18px;flex:none;accent-color:var(--blue)}
+.adm~.toast-host,.admin~.toast-host{bottom:24px}
+
+/* Admin under 1024px: sidebar becomes a sticky top bar with a horizontally scrolling menu; content one column. */
+@media (max-width:1023px){
+  .adm{display:block}
+  .adm .side{position:sticky;top:0;height:auto;z-index:25;flex-direction:row;align-items:center;gap:4px;padding:10px 12px;overflow-x:auto;scrollbar-width:none}
+  .adm .side::-webkit-scrollbar,.adm .tabs::-webkit-scrollbar{display:none}
+  .adm .side .wordmark{font-size:17px;padding:0 6px 0 0;white-space:nowrap}
+  .adm .side .role{display:none}
+  .adm .side-nav{flex-direction:row;gap:4px}
+  .adm .side a{padding:8px 11px;font-size:14px;white-space:nowrap;border-radius:10px}
+  .adm .side a i{font-size:18px}
+  .adm .side .foot{margin:0 0 0 4px;border-top:0;border-left:1px solid rgba(255,255,255,.15);padding:0 0 0 4px;display:flex;gap:4px}
+  .adm .main{padding:16px}
+  .adm .main-top{flex-wrap:wrap;margin-bottom:14px}
+  .adm .main-top h1{font-size:23px}
+  .adm .stats{grid-template-columns:1fr 1fr;gap:12px}
+  .adm .stat .value{font-size:28px}
+  .adm .cols,.adm .cols-2-3,.adm .cols-3-2,.adm .grid3{grid-template-columns:minmax(0,1fr)}
+  .adm .search{min-width:0;flex-basis:100%}
+  .adm .toolbar .select,.adm .toolbar select{flex:1}
+  .adm .peserta-grid.has-detail{grid-template-columns:minmax(0,1fr)}
+  .adm .peserta-grid.has-detail .list-pane{display:none}
+  .adm .drawer{position:static;max-height:none;border-radius:18px}
+}
+@media (max-width:520px){
+  .adm .stats{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .modal .form-grid{grid-template-columns:minmax(0,1fr)}
+  .adm .tools{display:none}
+}

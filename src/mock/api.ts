@@ -5,6 +5,7 @@ import { normalizeCode } from '../lib/codes';
 import { bootstrapFor, catalog, GROUPS, packages, PURCHASES, UNCLAIMED_PURCHASE } from './fixtures';
 import { db, delay } from './db';
 import { issueTicket } from './gas';
+import { adminMock } from './admin';
 
 const fail = (status: number, reason: string, message = ''): never => {
   throw new ApiError(reason, message, status);
@@ -141,6 +142,8 @@ export async function mockApi<T>(method: string, path: string, body?: unknown): 
       return {} as T;
     }
   }
+
+  if (path.startsWith('/api/admin/')) return adminMock<T>(method, path, body, me);
 
   return fail(404, 'tiada', 'Halaman atau tindakan tidak dijumpai.');
 }

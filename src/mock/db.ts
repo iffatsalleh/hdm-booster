@@ -1,8 +1,8 @@
 // DEV MOCK ONLY. Accounts + signed-in uid kept in localStorage so a reload keeps the session (like Firebase).
-import { AHMAD, ALI, CODES, type MockAccount, type MockCode } from './fixtures';
+import { ADMIN, AHMAD, ALI, CODES, COACH, type MockAccount, type MockCode } from './fixtures';
 
-const K_ACCOUNTS = 'hdm_mock_accounts_v2';
-const K_CODES = 'hdm_mock_codes_v2';
+const K_ACCOUNTS = 'hdm_mock_accounts_v3';
+const K_CODES = 'hdm_mock_codes_v3';
 const K_UID = 'hdm_mock_uid';
 
 function read<T>(k: string, fallback: T): T {
@@ -22,7 +22,7 @@ function write(k: string, v: unknown) {
   }
 }
 
-let accounts: MockAccount[] = read(K_ACCOUNTS, [ALI, AHMAD]);
+let accounts: MockAccount[] = read(K_ACCOUNTS, [ALI, AHMAD, ADMIN, COACH]);
 let codes: MockCode[] = read(K_CODES, CODES);
 let uid: string | null = read<string | null>(K_UID, null);
 
@@ -41,6 +41,10 @@ export const db = {
   codes: () => codes,
   updateCode(code: string, patch: Partial<MockCode>) {
     codes = codes.map((c) => (c.code === code ? { ...c, ...patch } : c));
+    write(K_CODES, codes);
+  },
+  addCodes(list: MockCode[]) {
+    codes = [...list, ...codes];
     write(K_CODES, codes);
   },
   setUid(v: string | null) {

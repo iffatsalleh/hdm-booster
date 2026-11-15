@@ -122,6 +122,30 @@ export const AHMAD: MockAccount = {
   },
 };
 
+/** Staff fixture: superadmin (owner). Admin menu: every section. */
+export const ADMIN: MockAccount = {
+  uid: 'mock-admin',
+  email: 'admin@hdm.my',
+  password: MOCK_PASSWORD,
+  full_name: 'Zahirah Ismail',
+  phone: '60134417042',
+  onboarded_at: '2026-11-01T09:00:00+08:00',
+  roles: ['superadmin'],
+  entitlements: COMPLETE,
+};
+
+/** Staff fixture: coach, not onboarded (staff exemption). Admin menu: Ringkasan + Peserta, read-only. */
+export const COACH: MockAccount = {
+  uid: 'mock-coach',
+  email: 'coach@hdm.my',
+  password: MOCK_PASSWORD,
+  full_name: 'Coach Iffat Salleh',
+  phone: '60112233445',
+  onboarded_at: null,
+  roles: ['coach'],
+  entitlements: [],
+};
+
 /** account_summary purchases per fixture uid. */
 export const PURCHASES: Record<string, unknown[]> = {
   'mock-ali': [{
@@ -138,7 +162,11 @@ export const GROUPS = [
 ];
 
 export type MockCode = { code: string; package_id: string; status: 'baru' | 'aktif' | 'dibatalkan'; expired?: boolean;
-  redeemed_by?: string; redeemed_at?: string };
+  redeemed_by?: string; redeemed_at?: string;
+  /** admin view (src/mock/admin.ts): access_codes columns */
+  id?: string; batch_id?: string | null; batch_label?: string | null; buyer_name?: string | null; buyer_phone?: string | null;
+  buyer_email?: string | null; order_ref?: string | null; access_ends_at?: string | null; entitlements?: string[];
+  created_at?: string; created_by?: string | null };
 
 /** Access codes: HDMB-UPGR-ADE2 upgrades Basic to Complete (7 new items); the rest exercise each failure reason. */
 export const CODES: MockCode[] = [
