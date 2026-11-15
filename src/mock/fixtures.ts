@@ -1,6 +1,6 @@
 // DEV MOCK ONLY (npm run dev:mock). Never imported by a production build.
 // Mirrors db/seed.sql: catalogue, Batch Rejab 1448, 7 ebooks, public settings.
-import type { Bootstrap, CatalogPackage } from '../state/session';
+import type { Bootstrap, CatalogPackage, Reading } from '../state/session';
 
 export const MOCK_PASSWORD = 'rahsia1234';
 
@@ -65,8 +65,9 @@ export const catalog: Bootstrap['catalog'] = {
   packages,
   ebooks: ebooks.map(([item_key, title], i) => ({
     id: `00000000-0000-4000-8000-00000000000${i + 1}`,
-    item_key, number: i + 1, title, description: null, cover_url: null, allow_download: false,
-    file_updated_at: null, sort: i + 1,
+    // mock: ebook 01 may be downloaded (exercises the download button); files "updated" 01/12/2026
+    item_key, number: i + 1, title, description: null, cover_url: null, allow_download: i === 0,
+    file_updated_at: '2026-12-01T02:00:00.000Z', sort: i + 1,
   })),
   settings: {
     support_wa: '60134417042',
@@ -86,6 +87,8 @@ export type MockAccount = {
   entitlements: string[];
   /** Onboarding / target columns of `profiles` (sex, birth_year, height_cm, ...). */
   profile?: Record<string, unknown>;
+  /** reading_progress rows (PUT /api/ebook/:id/progress). */
+  reading?: Reading[];
 };
 
 /** Registered fixture user: Ali Bin Abu, Pakej Basic, already onboarded. */
@@ -159,6 +162,6 @@ export function bootstrapFor(a: MockAccount): Bootstrap {
     entitlements: a.entitlements,
     batch,
     catalog,
-    reading: [],
+    reading: a.reading ?? [],
   };
 }

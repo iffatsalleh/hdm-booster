@@ -17,6 +17,8 @@ import { Groups } from './pages/Groups';
 import { Account } from './pages/account/Account';
 import { Codes } from './pages/account/Codes';
 import { Aktif } from './pages/Aktif';
+import { Library } from './pages/ebooks/Library';
+import { Reader } from './pages/ebooks/Reader';
 
 function Loading() {
   return (
@@ -58,6 +60,8 @@ function Page({ route }: { route: Route }) {
     case 'akaun': return <Account />;
     case 'akaun_kod': return <Codes />;
     case 'aktif': return <Aktif />;
+    case 'ebook': return <Library />;
+    case 'ebook_read': return <Reader key={route.params.id} id={route.params.id} />;
     case 'tiada': return <NotFound />;
     default: return <Placeholder route={route.name} />;
   }

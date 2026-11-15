@@ -130,4 +130,13 @@ describe('createGas', () => {
     expect(e).toBeInstanceOf(ApiError);
     expect(e.reason).toBe('tiket_tamat');
   });
+
+  it('keeps the Apps Script BM message of {ok:false, message} (no reason)', async () => {
+    const gas = createGas({
+      url: 'u',
+      fetch: (async () => res(200, { ok: false, message: 'Sesi ebook tamat. Sila buka semula ebook.' })) as unknown as typeof fetch,
+    });
+    const e = await failure(gas('ebook.chunk', {}));
+    expect([e.reason, e.message]).toEqual(['ralat_pelayan', 'Sesi ebook tamat. Sila buka semula ebook.']);
+  });
 });

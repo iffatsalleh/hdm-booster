@@ -4,6 +4,7 @@ import { normalizeEmail, normalizePhone } from '../lib/phone';
 import { normalizeCode } from '../lib/codes';
 import { bootstrapFor, catalog, GROUPS, packages, PURCHASES, UNCLAIMED_PURCHASE } from './fixtures';
 import { db, delay } from './db';
+import { issueTicket } from './gas';
 
 const fail = (status: number, reason: string, message = ''): never => {
   throw new ApiError(reason, message, status);
@@ -117,6 +118,28 @@ export async function mockApi<T>(method: string, path: string, body?: unknown): 
     db.updateCode(c.code, { status: 'aktif', redeemed_by: me.uid, redeemed_at: new Date().toISOString() });
     redeemFailures = 0;
     return { items } as T;
+  }
+
+  const eb = /^(POST|PUT) \/api\/ebook\/([^/]+)\/(ticket|progress)$/.exec(key);
+  if (eb) {
+    const e = catalog.ebooks.find((x) => x.id === eb[2]);
+    if (!e || !me.entitlements.includes(e.item_key)) fail(403, 'tiada_akses', 'Ebook ini tersedia dalam Pakej Complete.');
+    if (eb[1] === 'POST' && eb[3] === 'ticket') {
+      return { ticket: issueTicket(e!.id), updatedAt: e!.file_updated_at, allowDownload: e!.allow_download } as T;
+    }
+    if (eb[1] === 'PUT' && eb[3] === 'progress') {
+      const lp = b.last_page;
+      const fin = b.finished ?? false;
+      if (typeof lp !== 'number' || !Number.isInteger(lp) || lp < 0 || lp > 100000 || typeof fin !== 'boolean') {
+        fail(400, 'data_tidak_sah');
+      }
+      const now = new Date().toISOString();
+      const prev = (me.reading ?? []).find((r) => r.ebook_id === e!.id);
+      const row = { user_id: me.uid, ebook_id: e!.id, last_page: lp as number,
+        finished_at: fin ? prev?.finished_at ?? now : prev?.finished_at ?? null, updated_at: now };
+      db.update(me.uid, { reading: [...(me.reading ?? []).filter((r) => r.ebook_id !== e!.id), row] });
+      return {} as T;
+    }
   }
 
   return fail(404, 'tiada', 'Halaman atau tindakan tidak dijumpai.');

@@ -31,6 +31,8 @@ async function unwrap<T>(r: Response): Promise<T> {
   if (j && typeof j.reason === 'string') {
     throw new ApiError(j.reason, typeof j.message === 'string' ? j.message : '', r.status);
   }
+  // Apps Script errors are {ok:false, message} (BM text, no reason): keep the message for bm() / ticket expiry.
+  if (j && j.ok === false && typeof j.message === 'string') throw new ApiError('ralat_pelayan', j.message, r.status);
   throw new ApiError('ralat_pelayan', '', r.status);
 }
 
