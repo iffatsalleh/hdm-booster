@@ -48,6 +48,10 @@ Gambaran ringkas:
 4. Dalam `worker/wrangler.toml` [vars] isi: `FIREBASE_PROJECT_ID` (cth. `hdm-prod`), `ALLOWED_ORIGINS` = `https://<nama-blog>.blogspot.com` **sahaja** (tanpa `/` di hujung, tanpa localhost). `GAS_URL` diisi di Langkah 4.
 5. Deploy pertama: `npx wrangler deploy` (masih dalam folder `worker`). Catat URL `https://hdm-api.<akaun>.workers.dev`.
 6. Kembali ke folder projek (`cd ..`) dan jana + hantar rahsia: `node scripts/setup.mjs secrets --apply`
+   **Penting:** `secrets --rotate` menjana semula **ketiga-tiga** rahsia, termasuk `BCL_WEBHOOK_KEY`. Selepas setiap
+   `--rotate`, kemas kini nilai baharu di Apps Script › Script properties (`INTERNAL_SECRET`, `TICKET_SECRET`,
+   `BCL_WEBHOOK_KEY`) **dan** URL webhook dalam BCL (Langkah 5.2, bahagian `k=`). Jika URL BCL tidak dikemas kini,
+   setiap webhook ditolak (`forbidden`) dan pesanan hanya masuk melalui semakan 10 minit.
 7. Hantar akaun servis Firebase: `node scripts/setup.mjs firebase-sa "C:\Users\<nama>\Downloads\<fail>.json" --apply`, kemudian **padam fail JSON itu**.
 8. Semak: `node scripts/setup.mjs check` dan `node scripts/smoke.mjs https://hdm-api.<akaun>.workers.dev --internal-secret`
 
@@ -82,7 +86,7 @@ Nota pembangun: `npx wrangler dev` dengan blok `[[hyperdrive]]` perlukan `localC
 ## 5. BCL (pembayaran)
 
 1. Dalam BCL, jana **API token** dan masukkan ke Script property `BCL_API_TOKEN`.
-2. Tetapan webhook BCL: `https://script.google.com/macros/s/<ID>/exec?src=bcl&k=<BCL_WEBHOOK_KEY>` (URL Langkah 4.7 + kunci dari `.env.prod`).
+2. Tetapan webhook BCL: `https://script.google.com/macros/s/<ID>/exec?src=bcl&k=<BCL_WEBHOOK_KEY>` (URL Langkah 4.7 + kunci dari `.env.prod`). Ulang langkah ini setiap kali `setup.mjs secrets --rotate` dijalankan.
 3. Selepas Langkah 7, buka Admin › **Pemetaan BCL** dan tambah setiap borang BCL: Formable ID, Jumlah RM, Pakej, Aktif.
 
 ## 6. GitHub + jsDelivr + Blogspot
@@ -105,6 +109,15 @@ Nota pembangun: `npx wrangler dev` dengan blok `[[hyperdrive]]` perlukan `localC
 
 1. `node scripts/setup.mjs check` dan `node scripts/smoke.mjs https://hdm-api.<akaun>.workers.dev --internal-secret` → semua PASS.
 2. Ujian beban **sebelum lancar sahaja**: `node scripts/loadtest.mjs https://hdm-api.<akaun>.workers.dev --sebelum-lancar` → 0 ralat, p95 < 2 s.
+3. **Data ujian mesti kosong sebelum lancar.** `node scripts/setup.mjs check` (baca sahaja) mengira baris yang
+   ditinggalkan oleh ujian pangkalan data: id / uid / emel / order_ref / label bermula `test_` dalam semua jadual
+   pengguna, serta item dan ebook bertajuk `Test…`. Baris "data ujian: tiada baris test_ tertinggal" mesti PASS.
+   Jika FAIL, minta pembangun membersihkannya sebelum pelancaran.
+
+> **AMARAN: selepas pelancaran, JANGAN SEKALI-KALI jalankan `npm run test:db` atau `npm run test:worker`.**
+> Kedua-duanya menulis ke pangkalan data sebenar (satu persekitaran sahaja). Selepas lancar, guna `npm test`
+> sahaja (ujian unit + ujian keselamatan Worker dengan pangkalan data palsu; `deploy.mjs` menjalankannya sendiri)
+> dan semakan baca-sahaja `setup.mjs check` / `smoke.mjs`.
 
 Senarai semak (pemilik hadir):
 
@@ -115,20 +128,33 @@ Senarai semak (pemilik hadir):
 - [ ] Pesanan BCL sebenar (ujian + live) → pembelian direkod → emel diterima → daftar → ebook dibuka.
 - [ ] Ujian beban: 0 ralat, p95 < 2 s.
 - [ ] Telefon 375px dan desktop: tiada skrol mendatar di setiap halaman.
-- [ ] `npm run test:worker` lulus (menggunakan pangkalan data prod; data ujian dibersihkan sendiri).
+- [ ] **Sebelum lancar sahaja:** `npm run test:db` dan `npm run test:worker` lulus (menggunakan pangkalan data prod; data ujian dibersihkan sendiri), kemudian `node scripts/setup.mjs check` → tiada baris `test_` tertinggal. Selepas lancar: jangan jalankan lagi.
 - [ ] Apps Script › Triggers: `pollBcl`, `processEmailQueueTrigger`, `nightlyBackup` wujud. Folder backup ada fail selepas jam 3 pagi.
 - [ ] Hyperdrive dicipta dengan `--caching-disabled` (Cloudflare › Hyperdrive › hdm-db › Caching: Disabled).
 - [ ] Tiada rahsia dalam `dist/`: `Select-String -Path dist\* -Pattern "postgres://","PRIVATE KEY","HIVE_","INTERNAL_SECRET"` → tiada hasil.
 
 ## 9. Operasi harian
 
-1. **Kod manual** (pembeli bayar di luar BCL): Admin › Kod Akses › Jana kod › untuk pembeli › hantar melalui butang WhatsApp.
-2. **Batch tahun depan:** Admin › Kandungan › Batch › tambah batch baharu (tarikh jualan + program); tukar batch lama ke `tamat`. Tambah borang BCL baharu di Pemetaan BCL.
-3. **Ebook baharu:** muat naik PDF ke Google Drive, salin ID fail, tambah di Admin › Kandungan › Ebook.
-4. **Backup:** setiap malam ke folder Drive "HDM Backup/YYYY-MM-DD" (simpan 30 hari). Pemulihan perlu pembangun.
-5. **Kemas kini aplikasi:** `node scripts/deploy.mjs --push` (tambah `--worker` jika kod Worker berubah), kemudian tukar tag `@v…` pada 2 baris dalam tema Blogger.
-6. **Kemas kini Apps Script:** `npx @google/clasp@2.4.2 push --force` dalam `apps-script`, kemudian Deploy › Manage deployments › ✎ › Version: **New version** › Deploy (URL kekal sama).
-7. **Naik taraf pelan:** HornetHive Pro (jika sambungan terus disekat atau storan penuh); Cloudflare Workers Paid USD 5/bulan (jika had harian dicapai); Google Workspace (had emel lebih tinggi).
+1. **Pembeli bayar di luar BCL** (pindahan bank, tunai): Admin › Pembelian › **Tambah pembelian manual** › pilih
+   pakej dan batch, isi nama, emel dan telefon bimbit pembeli (jumlah RM pilihan) › Simpan. Sistem mencipta order
+   `MANUAL-<tarikh>-<kod>` dan beratur emel pendaftaran. Pembeli kemudian **mendaftar** di `#/daftar` dengan emel dan
+   telefon yang SAMA. Jika pembeli sudah ada akaun dengan emel + telefon itu, akses terus ditambah (emel "Akses baharu").
+   Kod akses (Admin › Kod Akses › Jana kod › untuk pembeli) ialah pilihan tambahan **selepas** pembeli ada akaun:
+   menebus kod perlu log masuk, dan log masuk perlu akaun.
+2. **Order perlu semakan** (telefon/emel tidak sah, pakej atau batch tiada): Admin › Pembelian › tab "Perlu semakan" ›
+   ⋮ › **Betulkan maklumat pembeli** (nama, emel, telefon, batch) atau **Tetapkan pakej**. Bila lengkap, status menjadi
+   `belum_dituntut` dan pembeli menerima emel pendaftaran. **Proses semula order** menyemak semula dengan BCL dan
+   memaparkan hasil sebenar (berubah / tiada perubahan).
+3. **Order tanpa pembelian:** Admin › Pemetaan BCL › "Order tanpa pembelian" menyenaraikan order BCL yang diabaikan
+   (borang tiada dalam pemetaan) atau gagal. Tambah pemetaan borang dahulu, kemudian tekan **Proses semula**. Semakan
+   automatik 10 minit tidak mengulangi order yang diabaikan. Kad "Ralat webhook BCL" di Ringkasan juga ada butang
+   Proses semula.
+4. **Batch tahun depan:** Admin › Kandungan › Batch › tambah batch baharu (tarikh jualan + program); tukar batch lama ke `tamat`. Tambah borang BCL baharu di Pemetaan BCL.
+5. **Ebook baharu:** muat naik PDF ke Google Drive, salin ID fail, tambah di Admin › Kandungan › Ebook.
+6. **Backup:** setiap malam ke folder Drive "HDM Backup/YYYY-MM-DD" (simpan 30 hari). Pemulihan perlu pembangun.
+7. **Kemas kini aplikasi:** `node scripts/deploy.mjs --push` (tambah `--worker` jika kod Worker berubah), kemudian tukar tag `@v…` pada 2 baris dalam tema Blogger. Skrip ini berhenti jika ada perubahan belum di-commit dalam `src`, `worker`, `apps-script`, `db` atau `scripts` (commit dahulu), dan menjalankan `npm test` (termasuk ujian keselamatan Worker) sebelum bina atau deploy.
+8. **Kemas kini Apps Script:** `npx @google/clasp@2.4.2 push --force` dalam `apps-script`, kemudian Deploy › Manage deployments › ✎ › Version: **New version** › Deploy (URL kekal sama).
+9. **Naik taraf pelan:** HornetHive Pro (jika sambungan terus disekat atau storan penuh); Cloudflare Workers Paid USD 5/bulan (jika had harian dicapai); Google Workspace (had emel lebih tinggi).
 
 ## 10. Risiko diketahui
 
@@ -136,4 +162,4 @@ Senarai semak (pemilik hadir):
 2. **Cloudflare Free:** Hyperdrive 100,000 query/hari dan Workers 100,000 permintaan/hari. Pantau di Cloudflare › Hyperdrive / Workers. Jika hampir had, naik taraf Workers Paid.
 3. **Gmail:** akaun Gmail biasa boleh menghantar kira-kira 100 emel/hari. Hari pelancaran dengan lebih 100 pembeli: sebahagian emel lewat atau gagal; hantar semula dari Admin atau guna Google Workspace.
 4. **CDN:** aplikasi, ikon (unpkg) dan pembaca PDF (jsDelivr) dimuat dari CDN awam. Jika CDN terganggu, aplikasi tidak dimuat sehingga pulih.
-5. **Satu persekitaran sahaja (prod):** ujian (`npm run test:worker`, ujian beban) menyentuh sistem sebenar. Jalankan ujian beban sebelum pelancaran sahaja.
+5. **Satu persekitaran sahaja (prod):** `npm run test:db`, `npm run test:worker` dan ujian beban menulis ke sistem sebenar. Jalankan sebelum pelancaran sahaja; selepas lancar JANGAN jalankan (lihat Langkah 8).

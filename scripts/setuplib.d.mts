@@ -15,3 +15,8 @@ export function cdnUrls(owner: string, repo: string, tag: string): { js: string;
 export function sigHeader(secret: string, t: number, body: string): string;
 export function percentile(values: number[], p: number): number;
 export function spawnPlan(cmd: string, args: string[], platform?: string): { cmd: string; args: string[]; shell: boolean };
+export const DEPLOY_GUARDED: string[];
+export function dirtyStatusArgs(): string[];
+export function dirtyRefusal(porcelain: string, allowDirty: boolean): string | null;
+export const TEST_ROW_CHECKS: { table: string; where: string }[];
+export function testRowCountSql(): string;

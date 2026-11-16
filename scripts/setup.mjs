@@ -3,7 +3,7 @@
 //   node scripts/setup.mjs firebase-sa <service-account.json> [--apply]
 //   node scripts/setup.mjs superadmin --uid <UID> --name "<Nama>" --email <emel> --phone <telefon>
 //   node scripts/setup.mjs role <UID> coach|superadmin [--remove] [--name … --email … --phone …]
-//   node scripts/setup.mjs check
+//   node scripts/setup.mjs check            (read-only; also counts test_ rows left by the DB test suites)
 // Secrets are written only to the gitignored .env.prod and piped to wrangler through stdin: never printed
 // unless --show is given.
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
@@ -13,7 +13,7 @@ import pg from 'pg';
 import { parseEnv } from './hive.mjs';
 import {
   randomSecret, mergeEnv, findPlaceholders, tomlValue, originProblems, validateServiceAccount, isFirebaseUid,
-  normalizePhone, parseArgs, spawnPlan,
+  normalizePhone, parseArgs, spawnPlan, testRowCountSql,
 } from './setuplib.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -230,6 +230,10 @@ async function check() {
           const admins = Number((await db.query("select count(*) as n from user_roles where role = 'superadmin'")).rows[0].n);
           if (admins) pass(`superadmin: ${admins}`);
           else warn('belum ada superadmin (Langkah 7 dalam README)');
+          // read-only: rows left by `npm run test:db` / `npm run test:worker` (test_ markers, 'Test…' titles)
+          const left = (await db.query(testRowCountSql())).rows.filter((r) => Number(r.n) > 0);
+          if (!left.length) pass('data ujian: tiada baris test_ tertinggal');
+          else fail(`data ujian tertinggal: ${left.map((r) => `${r.t} ${r.n}`).join(', ')} (bersihkan sebelum lancar; README Langkah 8)`);
         }
       });
     } catch (e) {

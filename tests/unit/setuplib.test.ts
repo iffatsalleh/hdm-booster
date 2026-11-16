@@ -162,3 +162,38 @@ describe('spawnPlan (deploy/setup child processes)', () => {
     expect(() => spawnPlan('npx', ['x&calc'], 'win32')).toThrow();
   });
 });
+
+describe('deploy dirty-tree guard', () => {
+  it('git status argv covers src, worker, apps-script, db, scripts', async () => {
+    const { DEPLOY_GUARDED, dirtyStatusArgs } = await import('../../scripts/setuplib.mjs');
+    expect(DEPLOY_GUARDED).toEqual(['src', 'worker', 'apps-script', 'db', 'scripts']);
+    expect(dirtyStatusArgs()).toEqual(['status', '--porcelain', '--', 'src', 'worker', 'apps-script', 'db', 'scripts']);
+  });
+  it('refuses a dirty tree unless --allow-dirty; clean tree passes', async () => {
+    const { dirtyRefusal } = await import('../../scripts/setuplib.mjs');
+    expect(dirtyRefusal('', false)).toBeNull();
+    expect(dirtyRefusal('\n', false)).toBeNull();
+    const msg = dirtyRefusal(' M src/app.tsx\n?? worker/x.ts\n', false);
+    expect(msg).toContain('src/app.tsx');
+    expect(msg).toContain('worker/x.ts');
+    expect(msg).toContain('--allow-dirty');
+    expect(dirtyRefusal(' M src/app.tsx\n', true)).toBeNull();
+    const many = Array.from({ length: 15 }, (_, i) => ` M src/f${i}.ts`).join('\n');
+    expect(dirtyRefusal(many, false)).toContain('5 lagi');
+  });
+});
+
+describe('test_ row count (setup.mjs check, read-only)', () => {
+  it('one SELECT over every user table + Test-titled content, no writes', async () => {
+    const { TEST_ROW_CHECKS, testRowCountSql } = await import('../../scripts/setuplib.mjs');
+    const tables = TEST_ROW_CHECKS.map((c: { table: string }) => c.table);
+    for (const t of ['profiles', 'user_roles', 'manual_grants', 'access_codes', 'reading_progress', 'rate_attempts', 'audit_logs',
+      'purchases', 'email_queue', 'bcl_webhook_log', 'bcl_form_map', 'items', 'ebooks']) expect(tables, t).toContain(t);
+    const sql = testRowCountSql();
+    expect(sql).toMatch(/^select /);
+    expect(sql).not.toMatch(/\b(insert|update|delete|drop|alter|truncate)\b/i);
+    expect(sql).toContain("like 'test!_%' escape '!'");
+    expect(sql).toContain("title like 'Test%'");
+    expect(sql.split(' union all ').length).toBe(TEST_ROW_CHECKS.length);
+  });
+});

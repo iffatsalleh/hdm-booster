@@ -113,6 +113,13 @@ Kekal seperti v1:
 
 Nota: medan BCL disahkan dengan satu order ujian dan log payload sebenar sebelum siap (sumber v1: integrasi pihak ketiga cave-lms).
 
+Pindaan (gelombang pembetulan akhir, migrasi 0007):
+- Emel ikut status: `purchase_welcome` (daftar akaun) hanya untuk pembelian `belum_dituntut`; pembelian yang dituntut automatik ke akaun sedia ada menerima `purchase_added` ("Akses baharu telah ditambah ke akaun anda" + pautan log masuk); `perlu_semakan` tiada emel sehingga ia boleh didaftar.
+- `upsert_purchase` menilai semula baris yang masih `perlu_semakan` (pakej, batch, status, auto-tuntut); baris `belum_dituntut` / `dituntut` / `dibatalkan` tidak diubah. "Proses semula" kini benar-benar menilai semula dan memaparkan hasil sebenar.
+- Admin boleh membetulkan nama/emel/telefon pembeli (`set_buyer`), memilih batch pada tetapkan pakej / betulkan pembeli / pulih, dan menambah **pembelian manual** (`MANUAL-<YYYYMMDD>-<rawak>`) untuk pembeli di luar BCL; pembeli itu kemudian mendaftar seperti biasa.
+- Order yang diabaikan / gagal tanpa pembelian disenaraikan di Pemetaan BCL › "Order tanpa pembelian" dengan butang Proses semula (paksa nilai semula). Polling tetap menganggap order `ignored` sebagai diketahui.
+- Apps Script tidak lagi mengunci skrip semasa memproses order (Worker idempoten); kunci hanya untuk baris gilir emel. Polling membaca hingga 5 halaman ke belakang sehingga satu halaman semuanya sudah diketahui.
+
 ### 5.2 Pendaftaran
 - `#/daftar`: emel + telefon + nama + kata laluan + akuan privasi.
 - Browser → `POST /api/register` (awam, had 5 gagal/15 min per IP). Worker semak `purchases` padan emel **dan** telefon:

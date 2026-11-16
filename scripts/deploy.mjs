@@ -1,14 +1,18 @@
-// Release the app: tests → build → commit dist/ (only if it changed) → tag vYYYYMMDD-N (Malaysia date)
-// → print the jsDelivr URLs and the template lines to change.
-//   node scripts/deploy.mjs [--worker] [--push]
-//     --worker  also runs `npx wrangler deploy` in worker/
-//     --push    also runs `git push origin HEAD --tags` (jsDelivr only sees pushed tags)
+// Release the app: clean-tree check → tests → build → commit dist/ (only if it changed) → tag vYYYYMMDD-N
+// (Malaysia date) → print the jsDelivr URLs and the template lines to change.
+//   node scripts/deploy.mjs [--worker] [--push] [--allow-dirty]
+//     --worker       also type-checks worker/ and runs `npx wrangler deploy` in worker/
+//     --push         also runs `git push origin HEAD --tags` (jsDelivr only sees pushed tags)
+//     --allow-dirty  release even with uncommitted changes in src, worker, apps-script, db or scripts
+// `npm test` includes the Worker security suite against a fake Hive (tests/security: route inventory, 401 without
+// token, participant/coach 403 matrix, unsigned /internal 401), so no Worker is deployed with a broken boundary.
+// The DB-backed suites (npm run test:db / test:worker) write to the production database: never after launch.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parseArgs, mytYmd, nextTag, parseGithubRemote, cdnUrls, spawnPlan } from './setuplib.mjs';
+import { parseArgs, mytYmd, nextTag, parseGithubRemote, cdnUrls, spawnPlan, dirtyStatusArgs, dirtyRefusal } from './setuplib.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
-const { flags } = parseArgs(process.argv.slice(2), ['worker', 'push']);
+const { flags } = parseArgs(process.argv.slice(2), ['worker', 'push', 'allow-dirty']);
 
 function run(cmd, args, opts = {}) {
   console.log(`\n> ${cmd} ${args.join(' ')}`);
@@ -26,7 +30,20 @@ function out(cmd, args) {
   return r.status === 0 ? r.stdout.trim() : '';
 }
 
-run('npm', ['test']);
+// The tag must point at what was tested: refuse uncommitted source changes (git status failing counts as dirty).
+{
+  const plan = spawnPlan('git', dirtyStatusArgs());
+  const st = spawnSync(plan.cmd, plan.args, { cwd: ROOT, encoding: 'utf8', shell: plan.shell });
+  const refusal = st.status === 0 ? dirtyRefusal(st.stdout, !!flags['allow-dirty']) : 'git status gagal: semak folder ini repo git.';
+  if (refusal) {
+    console.error(`\nDIHENTIKAN: ${refusal}`);
+    process.exit(1);
+  }
+  if (flags['allow-dirty'] && st.stdout.trim()) console.warn('\nAMARAN: --allow-dirty, ada perubahan belum di-commit.');
+}
+
+run('npm', ['test']); // includes the fake-Hive Worker security suite (tests/security)
+if (flags.worker) run('npx', ['tsc', '-p', 'worker', '--noEmit']);
 run('npm', ['run', 'build']);
 
 if (out('git', ['status', '--porcelain', '--', 'dist'])) {

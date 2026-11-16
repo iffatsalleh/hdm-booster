@@ -178,3 +178,46 @@ export function spawnPlan(cmd, args, platform = process.platform) {
   }
   return { cmd, args, shell };
 }
+
+/** Folders whose uncommitted changes block `deploy.mjs`: a release tag must point at the code that was tested. */
+export const DEPLOY_GUARDED = ['src', 'worker', 'apps-script', 'db', 'scripts'];
+
+export function dirtyStatusArgs() {
+  return ['status', '--porcelain', '--', ...DEPLOY_GUARDED];
+}
+
+/** null when the release may go on; else the BM refusal listing (up to 10) changed paths. */
+export function dirtyRefusal(porcelain, allowDirty) {
+  const lines = String(porcelain || '').split('\n').map((l) => l.trimEnd()).filter((l) => l.trim());
+  if (!lines.length || allowDirty) return null;
+  const shown = lines.slice(0, 10).map((l) => `  ${l}`).join('\n');
+  const more = lines.length > 10 ? `\n  ... (${lines.length - 10} lagi)` : '';
+  return `Ada perubahan belum di-commit dalam ${DEPLOY_GUARDED.join(', ')}:\n${shown}${more}\n`
+    + 'Commit dahulu supaya tag sama dengan kod yang diuji (atau tambah --allow-dirty jika benar-benar perlu).';
+}
+
+/**
+ * Rows the DB test suites (npm run test:db / test:worker) leave behind if a run was cut short: every test row
+ * carries a `test_` marker (uid, email, order_ref, label, key) or a 'Test…' title. Read-only.
+ */
+const T = "like 'test!_%' escape '!'";
+export const TEST_ROW_CHECKS = [
+  { table: 'profiles', where: `id ${T} or email ${T}` },
+  { table: 'user_roles', where: `user_id ${T}` },
+  { table: 'manual_grants', where: `user_id ${T} or item_key ${T}` },
+  { table: 'access_codes', where: `redeemed_by ${T} or batch_label ${T}` },
+  { table: 'reading_progress', where: `user_id ${T}` },
+  { table: 'rate_attempts', where: `subject ${T}` },
+  { table: 'audit_logs', where: `actor ${T} or target_id ${T}` },
+  { table: 'purchases', where: `order_ref ${T} or email ${T} or claimed_by ${T}` },
+  { table: 'email_queue', where: `to_email ${T}` },
+  { table: 'bcl_webhook_log', where: `order_ref ${T}` },
+  { table: 'bcl_form_map', where: `formable_id ${T}` },
+  { table: 'items', where: `key ${T} or name like 'Test%'` },
+  { table: 'ebooks', where: `item_key ${T} or title like 'Test%'` },
+];
+
+/** One SELECT: (table, n) per TEST_ROW_CHECKS entry. */
+export function testRowCountSql() {
+  return TEST_ROW_CHECKS.map((c) => `select '${c.table}' as t, count(*)::int as n from ${c.table} where ${c.where}`).join(' union all ');
+}
