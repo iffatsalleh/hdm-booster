@@ -112,7 +112,7 @@ describe('admin_purchase_action', () => {
     expect((await q('select entitlements_for($1) as e', [u]))[0].e).toHaveLength(5);
   });
 
-  test('cancel -> dibatalkan; restore -> dituntut if claimed else belum_dituntut; unknown action rejected', async () => {
+  test('cancel -> dibatalkan; restore -> dituntut if claimed, else re-evaluated (0007); unknown action rejected', async () => {
     const admin = await withRole('superadmin');
     const u = await profile();
     const claimed = await mkPurchase({ uid: u, pkg: 'basic', status: 'dituntut' });
@@ -121,7 +121,8 @@ describe('admin_purchase_action', () => {
     expect((await q('select entitlements_for($1) as e', [u]))[0].e).toHaveLength(0);
     expect((await act(admin, claimed, 'restore')).status).toBe('dituntut');
     expect((await act(admin, open, 'cancel')).status).toBe('dibatalkan');
-    expect((await act(admin, open, 'restore')).status).toBe('belum_dituntut');
+    // no batch / email / phone on this bare row: restore re-evaluates it instead of making it registrable
+    expect(await act(admin, open, 'restore')).toMatchObject({ status: 'perlu_semakan', review_reason: 'Tiada batch dibuka' });
     await expect(act(admin, open, 'explode')).rejects.toThrow('tindakan_tidak_sah');
     await expect(act(admin, '00000000-0000-0000-0000-000000000000', 'cancel')).rejects.toThrow('pembelian_tidak_wujud');
   });
