@@ -1,8 +1,9 @@
 // #/admin — Ringkasan: admin_summary tiles (coach + superadmin), perlu-semakan list (superadmin), Hyperdrive info.
-import { dateTimeMYT, isSuperadmin } from '../../lib/admin';
+import { useState } from 'preact/hooks';
+import { dateTimeMYT, isSuperadmin, isWebhookError } from '../../lib/admin';
 import { useSession } from '../../state/session';
 import { Button } from '../../ui/Button';
-import { adminApi, AdminShell, ErrorBox, Loading, useLoad, type Row } from './ui';
+import { adminApi, AdminShell, ErrorBox, Loading, reprocessOrderRef, useLoad, type Row } from './ui';
 
 type Summary = {
   participants: number;
@@ -26,6 +27,14 @@ export function AdminHome() {
     [sa],
   );
   const d = sum.data;
+  const [busyRef, setBusyRef] = useState<string | null>(null);
+  // real errors only: ignored / skipped orders are listed under Pemetaan BCL › Order tanpa pembelian
+  const hookErrors = (d?.webhook_errors ?? []).filter(isWebhookError);
+  const reprocess = async (ref: string) => {
+    setBusyRef(ref);
+    if (await reprocessOrderRef(ref)) void sum.reload();
+    setBusyRef(null);
+  };
   const codesTotal = d ? Object.values(d.codes).reduce((a, b) => a + b, 0) : 0;
 
   return (
@@ -105,8 +114,8 @@ export function AdminHome() {
           <section class="cols">
             {sa ? (
               <div class="card">
-                <div class="card-h"><h2>Ralat webhook BCL terkini</h2><span class={'badge ' + (d.webhook_errors?.length ? 'red' : 'green')}>{d.webhook_errors?.length ?? 0}</span></div>
-                {(d.webhook_errors ?? []).map((w, i) => (
+                <div class="card-h"><h2>Ralat webhook BCL terkini</h2><span class={'badge ' + (hookErrors.length ? 'red' : 'green')}>{hookErrors.length}</span></div>
+                {hookErrors.map((w, i) => (
                   <div class="li" key={i}>
                     <div style="min-width:0">
                       <div class="small subtle">{dateTimeMYT(w.at)}</div>
@@ -114,11 +123,14 @@ export function AdminHome() {
                     </div>
                     <div class="row" style="gap:6px;flex:none">
                       <span class="chip" style="color:var(--red-d)">{w.kind ?? 'ralat'}</span>
-                      {w.order_ref ? <Button sm variant="outline" href={`#/admin/pembelian?q=${encodeURIComponent(w.order_ref)}`}>Semak</Button> : null}
+                      {w.order_ref ? <Button sm variant="outline" loading={busyRef === w.order_ref} disabled={!!busyRef}
+                        onClick={() => void reprocess(w.order_ref!)}>Proses semula</Button> : null}
+                      {w.order_ref ? <Button sm variant="ghost" href={`#/admin/pembelian?q=${encodeURIComponent(w.order_ref)}`}>Semak</Button> : null}
                     </div>
                   </div>
                 ))}
-                {!d.webhook_errors?.length ? <p class="small muted">Tiada ralat webhook.</p> : null}
+                {!hookErrors.length ? <p class="small muted">Tiada ralat webhook.</p> : null}
+                <p class="small muted" style="margin-top:10px">Order yang diabaikan (borang tiada dalam pemetaan) atau tanpa pembelian: <a href="#/admin/bcl">Pemetaan BCL › Order tanpa pembelian</a>.</p>
               </div>
             ) : null}
             <div class="card">

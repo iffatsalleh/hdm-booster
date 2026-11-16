@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { api, type Method } from '../../lib/api';
 import { toCsv } from '../../lib/csv';
 import {
-  adminError, isSuperadmin, needsConfirm, sectionHref, visibleSections, type AdminSection,
+  adminError, isSuperadmin, needsConfirm, reprocessMessage, sectionHref, visibleSections, type AdminSection,
 } from '../../lib/admin';
 import { todayMYT, formatDMY } from '../../lib/dates';
 import { signOut, useSession } from '../../state/session';
@@ -57,6 +57,16 @@ export async function act<T>(fn: () => Promise<T>, okText?: string): Promise<T |
     toast(adminError(e), 'red', 6000);
     return null;
   }
+}
+
+/** Admin "Proses semula" by BCL order ref (also an order that was ignored before): toast with the real outcome. */
+export async function reprocessOrderRef(ref: string): Promise<boolean> {
+  const r = await act(() =>
+    adminApi<{ ok: boolean; reason?: string; result?: unknown }>('POST', `/api/admin/orders/${encodeURIComponent(ref)}/reprocess`));
+  if (!r) return false;
+  const m = reprocessMessage(r);
+  toast(m.text, m.tone, 8000);
+  return true;
 }
 
 export function downloadCsv(filename: string, rows: Record<string, unknown>[]) {

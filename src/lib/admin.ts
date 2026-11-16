@@ -2,6 +2,7 @@
 // query builders, MYT dates / CSV filenames, CSV row builders and WhatsApp texts. The Worker enforces roles anyway.
 import { ApiError, bm } from './errors';
 import { fillTemplate } from './wa';
+import { normalizeEmail, normalizePhone } from './phone';
 
 export type AdminSection = 'ringkasan' | 'pembelian' | 'kod' | 'peserta' | 'bcl' | 'kandungan' | 'export' | 'audit';
 export type SectionDef = { key: AdminSection; path: string; label: string; icon: string; coach: boolean };
@@ -195,6 +196,69 @@ export const NO_PERMISSION = 'Tiada kebenaran untuk tindakan ini.';
 export function adminError(e: unknown): string {
   if (e instanceof ApiError && e.status === 403) return NO_PERMISSION;
   return bm(e);
+}
+
+// ---------------- recovery (unmatched buyers / orders) ----------------
+export type Tone = 'green' | 'yellow' | 'red';
+type ReprocessRes = { ok?: unknown; reason?: unknown; result?: unknown };
+
+/**
+ * Toast for "Proses semula": the Worker returns Apps Script's answer, whose `result` is either the Worker
+ * /internal/purchase response ({ok:true, data:{inserted, reevaluated, changed, status, review_reason}}) or
+ * {ok:false, reason} from processOrder. The text says what really happened.
+ */
+export function reprocessMessage(res: ReprocessRes): { tone: Tone; text: string } {
+  const r = (res?.result && typeof res.result === 'object' ? res.result : {}) as { ok?: unknown; reason?: unknown; data?: unknown };
+  const d = (r.data && typeof r.data === 'object' ? r.data : null) as
+    | { inserted?: boolean; reevaluated?: boolean; changed?: boolean; status?: string; review_reason?: string | null }
+    | null;
+  if (r.ok === true && d) {
+    if (d.inserted) return { tone: 'green', text: `Pembelian baharu direkodkan (status: ${d.status}).` };
+    if (d.reevaluated && d.changed) return { tone: 'green', text: `Order dinilai semula: status sekarang ${d.status}.` };
+    if (d.reevaluated) {
+      return {
+        tone: 'yellow',
+        text: `Order dinilai semula: tiada perubahan (masih perlu semakan${d.review_reason ? `: ${d.review_reason}` : ''}).`,
+      };
+    }
+    return { tone: 'yellow', text: `Tiada perubahan: pembelian ini sudah berstatus ${d.status}.` };
+  }
+  if (r.reason === 'unmapped') {
+    return { tone: 'yellow', text: 'Borang BCL order ini tiada dalam Pemetaan BCL. Tambah pemetaan dahulu, kemudian proses semula.' };
+  }
+  if (r.reason === 'not_paid_live') {
+    return { tone: 'yellow', text: 'Bayaran order ini belum disahkan oleh BCL (bukan transaksi live yang dibayar). Tiada perubahan.' };
+  }
+  const reason = res?.reason ?? r.reason;
+  return { tone: 'red', text: `Apps Script: ${typeof reason === 'string' && reason ? reason : 'tidak berjaya'}` };
+}
+
+type BatchLike = { id: unknown; sales_open_at?: unknown; sales_close_at?: unknown };
+/** Batch for a new manual purchase: the one whose sales window contains `now`, else the latest opening one. */
+export function defaultBatchId(batches: BatchLike[], now: number = Date.now()): string {
+  const t = (v: unknown) => (typeof v === 'string' ? Date.parse(v) : NaN);
+  const open = batches
+    .filter((b) => t(b.sales_open_at) <= now && now <= t(b.sales_close_at))
+    .sort((a, b) => t(b.sales_open_at) - t(a.sales_open_at))[0];
+  if (open) return String(open.id);
+  const latest = [...batches].sort((a, b) => (t(b.sales_open_at) || 0) - (t(a.sales_open_at) || 0))[0];
+  return latest ? String(latest.id) : '';
+}
+
+/** Client-side check of buyer details (the SQL re-checks): BM message or null. Same texts as the Worker. */
+export function buyerProblem(b: { name: string; email: string; phone: string }): string | null {
+  if (!b.name.trim()) return 'Sila isi nama pembeli.';
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizeEmail(b.email))) return 'Emel tidak sah. Semak semula emel pembeli.';
+  if (!normalizePhone(b.phone)) return 'Nombor telefon tidak sah. Guna nombor telefon bimbit Malaysia, contoh 0123456789.';
+  return null;
+}
+
+/** Webhook log rows that are real errors (ignored / skipped orders belong to "Order tanpa pembelian"). */
+export function isWebhookError(w: { kind?: unknown; ok?: unknown }): boolean {
+  const k = typeof w.kind === 'string' ? w.kind : '';
+  if (k === 'error' || k === 'ralat') return true;
+  if (['ignored', 'skipped', 'processed', 'ok'].includes(k)) return false;
+  return w.ok === false || w.ok === undefined;
 }
 
 // ---------------- paging ----------------

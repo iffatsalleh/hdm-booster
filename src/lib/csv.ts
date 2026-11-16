@@ -8,7 +8,7 @@ function cell(v: unknown): string {
 
 /** RFC 4180 CSV with UTF-8 BOM (for Excel). Columns come from the first row's keys. */
 export function toCsv(rows: Record<string, unknown>[]): string {
-  const BOM = '﻿';
+  const BOM = '\uFEFF';
   if (!rows.length) return BOM;
   const keys = Object.keys(rows[0]);
   const lines = [keys.map(cell).join(',')];

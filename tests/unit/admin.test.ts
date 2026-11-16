@@ -214,3 +214,49 @@ describe('fetchAllPages (offset paging until total)', () => {
     expect(listTotal([])).toBe(0);
   });
 });
+
+describe('recovery helpers (final fix wave)', () => {
+  it('reprocessMessage reflects the real outcome', async () => {
+    const { reprocessMessage } = await import('../../src/lib/admin');
+    const data = (d: Record<string, unknown>) => ({ ok: true, result: { ok: true, data: d } });
+    expect(reprocessMessage(data({ inserted: true, status: 'belum_dituntut' }))).toEqual({
+      tone: 'green', text: 'Pembelian baharu direkodkan (status: belum_dituntut).' });
+    expect(reprocessMessage(data({ inserted: false, reevaluated: true, changed: true, status: 'belum_dituntut' }))).toEqual({
+      tone: 'green', text: 'Order dinilai semula: status sekarang belum_dituntut.' });
+    expect(reprocessMessage(data({ inserted: false, reevaluated: true, changed: false, status: 'perlu_semakan', review_reason: 'Telefon tidak sah' }))).toEqual({
+      tone: 'yellow', text: 'Order dinilai semula: tiada perubahan (masih perlu semakan: Telefon tidak sah).' });
+    expect(reprocessMessage(data({ inserted: false, reevaluated: false, changed: false, status: 'dituntut' }))).toEqual({
+      tone: 'yellow', text: 'Tiada perubahan: pembelian ini sudah berstatus dituntut.' });
+    expect(reprocessMessage({ ok: false, result: { ok: false, reason: 'unmapped' } }).text).toContain('Pemetaan BCL');
+    expect(reprocessMessage({ ok: false, result: { ok: false, reason: 'not_paid_live' } }).text).toContain('belum disahkan');
+    expect(reprocessMessage({ ok: false, reason: 'error', result: null })).toEqual({ tone: 'red', text: 'Apps Script: error' });
+    expect(reprocessMessage({ ok: false, result: null })).toEqual({ tone: 'red', text: 'Apps Script: tidak berjaya' });
+  });
+
+  it('defaultBatchId: batch open now, else the latest by sales_open_at, else ""', async () => {
+    const { defaultBatchId } = await import('../../src/lib/admin');
+    const b = [
+      { id: 'old', sales_open_at: '2025-12-01T00:00:00+08:00', sales_close_at: '2026-01-31T23:59:00+08:00' },
+      { id: 'next', sales_open_at: '2026-12-01T00:00:00+08:00', sales_close_at: '2027-01-31T23:59:00+08:00' },
+    ];
+    expect(defaultBatchId(b, Date.parse('2026-01-10T00:00:00Z'))).toBe('old');
+    expect(defaultBatchId(b, Date.parse('2026-11-16T00:00:00Z'))).toBe('next');
+    expect(defaultBatchId([], Date.now())).toBe('');
+  });
+
+  it('buyerProblem: BM message for a missing name, bad email or phone', async () => {
+    const { buyerProblem } = await import('../../src/lib/admin');
+    expect(buyerProblem({ name: 'Ali', email: 'ali@gmail.com', phone: '012-345 6789' })).toBeNull();
+    expect(buyerProblem({ name: ' ', email: 'ali@gmail.com', phone: '0123456789' })).toBe('Sila isi nama pembeli.');
+    expect(buyerProblem({ name: 'Ali', email: 'ali@', phone: '0123456789' })).toBe('Emel tidak sah. Semak semula emel pembeli.');
+    expect(buyerProblem({ name: 'Ali', email: 'ali@gmail.com', phone: '0312345678' })).toMatch(/^Nombor telefon tidak sah/);
+  });
+
+  it('isWebhookError: error/ralat and unknown failures only', async () => {
+    const { isWebhookError } = await import('../../src/lib/admin');
+    expect(isWebhookError({ kind: 'error' })).toBe(true);
+    expect(isWebhookError({ kind: 'ralat' })).toBe(true);
+    expect(isWebhookError({ kind: 'pelik', ok: false })).toBe(true);
+    for (const kind of ['ignored', 'skipped', 'processed', 'ok']) expect(isWebhookError({ kind, ok: false })).toBe(false);
+  });
+});

@@ -2,6 +2,8 @@
 // BM messages. Purchases, grants, BCL map, content tables and audit live here (localStorage); accounts and access
 // codes are shared with src/mock/db.ts so a cancelled code / reset password affects the participant screens.
 import { ApiError } from '../lib/errors';
+import { isWebhookError } from '../lib/admin';
+import { normalizeEmail, normalizePhone } from '../lib/phone';
 import { db } from './db';
 import { batch, catalog, GROUPS, packages, type MockAccount, type MockCode } from './fixtures';
 
@@ -25,7 +27,7 @@ type State = {
   email_queue: { pending: number; failed: number };
 };
 
-const K = 'hdm_mock_admin_v2';
+const K = 'hdm_mock_admin_v3';
 const uuid = (n: number) => `00000000-0000-4000-9000-${String(n).padStart(12, '0')}`;
 const iso = (s: string) => new Date(s).toISOString();
 
@@ -48,6 +50,7 @@ function seed(): State {
       { at: iso('2026-11-14T00:15:00Z'), order_ref: 'BCL-10411', kind: 'error', ok: false, message: 'Jumlah RM147 tiada padanan pakej' },
       { at: iso('2026-11-13T14:03:00Z'), order_ref: 'BCL-10390', kind: 'skipped', ok: false, message: 'Tiada batch dibuka pada tarikh bayar' },
       { at: iso('2026-11-13T11:20:00Z'), order_ref: 'BCL-10398', kind: 'ok', ok: true, message: 'Order direkod' },
+      { at: iso('2026-11-13T09:05:00Z'), order_ref: 'BCL-10377', kind: 'ignored', ok: false, message: 'form not in bcl_form_map (webhook)' },
     ],
     email_queue: { pending: 2, failed: 1 },
     purchases: [
@@ -195,7 +198,7 @@ export function adminMock<T>(method: string, fullPath: string, body: unknown, me
       purchases: count(st.purchases),
       codes: count(db.codes().map(codeRow)),
       perlu_semakan: st.purchases.filter((p) => p.status === 'perlu_semakan').length,
-      webhook_errors: sa ? st.webhook_log.filter((w) => w.ok === false || w.kind === 'ralat' || w.kind === 'error').slice(0, 10)
+      webhook_errors: sa ? st.webhook_log.filter(isWebhookError).slice(0, 10)
         .map(({ at, order_ref, kind, message }) => ({ at, order_ref, kind, message })) : [],
       email_queue: st.email_queue,
     });
@@ -248,6 +251,53 @@ export function adminMock<T>(method: string, fullPath: string, body: unknown, me
   }
 
   // ---------------- purchases ----------------
+  const problem = (pu: Row) => (!pu.package_id ? 'Pakej tidak dikenali' : !pu.batch_id ? 'Tiada batch dibuka'
+    : !pu.phone ? 'Telefon tidak sah' : !pu.email ? 'Emel tidak sah' : null);
+  /** like 0007 purchase_reevaluate (no auto-claim in the mock) */
+  const reevaluate = (pu: Row) => {
+    const r = problem(pu);
+    Object.assign(pu, { status: r ? 'perlu_semakan' : 'belum_dituntut', review_reason: r ?? (pu.review_reason && !pu.package_id ? pu.review_reason : null) });
+  };
+  const buyer = (o: Row) => {
+    const email = normalizeEmail(String(o.email ?? ''));
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail(400, 'emel_tidak_sah', 'Emel tidak sah. Semak semula emel pembeli.');
+    const phone = normalizePhone(String(o.phone ?? ''));
+    if (!phone) fail(400, 'telefon_tidak_sah', 'Nombor telefon tidak sah. Guna nombor telefon bimbit Malaysia, contoh 0123456789.');
+    return { email, phone };
+  };
+  if (method === 'POST' && path === '/api/admin/purchases') {
+    if (!packages.some((k) => k.id === b.package_id)) fail(400, 'pakej_tidak_wujud', 'Pakej tidak dijumpai.');
+    const name = String(b.buyer_name ?? '').trim();
+    if (!name) fail(400, 'nama_diperlukan', 'Sila isi nama pembeli.');
+    const who = buyer(b);
+    const now = new Date();
+    const pu: Row = { id: uuid(++st.seq), order_ref: `MANUAL-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${String(st.seq).padStart(6, '0')}`,
+      batch_id: b.batch_id || batch.id, package_id: b.package_id, entitlements: itemsOf(b.package_id), buyer_name: name, ...who,
+      amount_rm: b.amount_rm ?? null, paid_at: now.toISOString(), created_at: now.toISOString(), source: 'manual',
+      claimed_by: null, claimed_at: null, review_reason: null, status: 'belum_dituntut' };
+    reevaluate(pu);
+    st.purchases.push(pu);
+    audit(me.uid, 'purchase.manual_add', 'purchase', pu.id as string, { order_ref: pu.order_ref });
+    return out(pu);
+  }
+  if (method === 'GET' && path === '/api/admin/orders/orphans') {
+    const latest = new Map<string, Row>();
+    for (const w of st.webhook_log) {
+      const ref = String(w.order_ref ?? '');
+      if (!ref || !['ignored', 'error', 'ralat'].includes(String(w.kind)) || st.purchases.some((pu) => pu.order_ref === ref)) continue;
+      const prev = latest.get(ref);
+      latest.set(ref, { order_ref: ref, kind: w.kind, message: w.message, at: prev && String(prev.at) > String(w.at) ? prev.at : w.at,
+        attempts: Number(prev?.attempts ?? 0) + 1 });
+    }
+    return out(page([...latest.values()].sort((p, q) => String(q.at).localeCompare(String(p.at)))));
+  }
+  if (method === 'POST' && (x = m(/^\/api\/admin\/orders\/([^/]+)\/reprocess$/))) {
+    const ref = decodeURIComponent(x[1]);
+    audit(me.uid, 'order.reprocess', 'order', ref, { gas_ok: false });
+    // the mock has no BCL: an ignored order stays unmapped
+    st.webhook_log.unshift({ at: new Date().toISOString(), order_ref: ref, kind: 'ignored', ok: false, message: 'form not in bcl_form_map (reprocess)' });
+    return out({ ok: false, result: { ok: false, reason: 'unmapped' } });
+  }
   if (method === 'GET' && path === '/api/admin/purchases') {
     const emails = new Set(db.accounts().map((a) => a.email.toLowerCase()));
     return out(page(st.purchases
@@ -263,10 +313,12 @@ export function adminMock<T>(method: string, fullPath: string, body: unknown, me
     if (!p) fail(404, 'pembelian_tidak_wujud', 'Pembelian tidak dijumpai.');
     const pu = p!;
     if (x[2] === 'reprocess') {
-      const okNow = pu.status === 'perlu_semakan' && !!pu.package_id && /^601\d{8,9}$/.test(String(pu.phone));
-      if (okNow) Object.assign(pu, { status: 'belum_dituntut', review_reason: null });
-      audit(me.uid, 'purchase.reprocess', 'purchase', pu.id as string, { order_ref: pu.order_ref, gas_ok: okNow });
-      return out(okNow ? { ok: true, result: 'diproses' } : { ok: false, result: null, reason: pu.review_reason ?? 'tiada_perubahan' });
+      const before = pu.status;
+      const reevaluated = before === 'perlu_semakan';
+      if (reevaluated) reevaluate(pu);
+      audit(me.uid, 'purchase.reprocess', 'purchase', pu.id as string, { order_ref: pu.order_ref, gas_ok: true });
+      return out({ ok: true, result: { ok: true, data: { inserted: false, reevaluated, changed: reevaluated && pu.status !== before,
+        status: pu.status, review_reason: pu.review_reason } } });
     }
     if (x[2] === 'resend-welcome') {
       if (!pu.email) fail(404, 'pembelian_tidak_wujud', 'Pembelian tidak dijumpai.');
@@ -280,11 +332,18 @@ export function adminMock<T>(method: string, fullPath: string, body: unknown, me
       Object.assign(pu, { claimed_by: payload.user_id, claimed_at: new Date().toISOString(), status: 'dituntut', review_reason: null });
     } else if (action === 'set_package') {
       if (!packages.some((k) => k.id === payload.package_id)) fail(400, 'pakej_tidak_wujud', 'Pakej tidak dijumpai.');
-      Object.assign(pu, { package_id: payload.package_id, entitlements: itemsOf(payload.package_id) });
+      Object.assign(pu, { package_id: payload.package_id, entitlements: itemsOf(payload.package_id), batch_id: payload.batch_id || pu.batch_id || batch.id });
+      if (pu.status === 'perlu_semakan') reevaluate(pu);
+    } else if (action === 'set_buyer') {
+      Object.assign(pu, buyer(payload), { buyer_name: String(payload.buyer_name ?? '').trim() || pu.buyer_name,
+        batch_id: payload.batch_id || pu.batch_id || batch.id });
+      if (pu.status === 'perlu_semakan') reevaluate(pu);
     } else if (action === 'cancel') {
       pu.status = 'dibatalkan';
     } else if (action === 'restore') {
-      pu.status = pu.claimed_by ? 'dituntut' : 'belum_dituntut';
+      if (payload.batch_id) pu.batch_id = payload.batch_id;
+      if (pu.claimed_by) pu.status = 'dituntut';
+      else reevaluate(pu);
     } else {
       fail(400, 'tindakan_tidak_sah', 'Tindakan tidak sah.');
     }

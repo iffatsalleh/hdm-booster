@@ -1,7 +1,8 @@
 // #/admin/pembelian — admin_purchases list (status tabs incl. "Perlu semakan", batch, search) and row actions:
-// set_package, assign, cancel (confirm), restore, reprocess (Apps Script), resend welcome, WhatsApp (belum_dituntut).
+// set_package / set_buyer / restore (optional batch), assign, cancel (confirm), reprocess (Apps Script, real outcome
+// shown), resend welcome, WhatsApp (belum_dituntut), and "Tambah pembelian manual" for buyers who paid outside BCL.
 import { useEffect, useState } from 'preact/hooks';
-import { appUrl, buildQuery, dateTimeMYT, listTotal, purchaseWaText } from '../../lib/admin';
+import { appUrl, buildQuery, dateTimeMYT, listTotal, purchaseWaText, reprocessMessage } from '../../lib/admin';
 import { waLink } from '../../lib/wa';
 import { useSession } from '../../state/session';
 import { Button } from '../../ui/Button';
@@ -10,6 +11,7 @@ import {
   act, ActionsButton, adminApi, AdminShell, confirmed, ErrorBox, Loading, Modal, PickParticipant, PkgBadge, SearchBox,
   Select, StatusBadge, useLoad, useSettings, type Row,
 } from './ui';
+import { ManualPurchase, RestorePurchase, SetBuyer, SetPackage } from './PurchaseForms';
 
 const TABS: [string, string][] = [
   ['', 'Semua'], ['perlu_semakan', 'Perlu semakan'], ['belum_dituntut', 'Belum dituntut'], ['dituntut', 'Dituntut'],
@@ -30,6 +32,9 @@ export function Purchases(p: { query?: Record<string, string> }) {
   const tpl = useSettings(true);
   const [pkgFor, setPkgFor] = useState<Row | null>(null);
   const [assignFor, setAssignFor] = useState<Row | null>(null);
+  const [buyerFor, setBuyerFor] = useState<Row | null>(null);
+  const [restoreFor, setRestoreFor] = useState<Row | null>(null);
+  const [manual, setManual] = useState(false);
   const pkgs = s.catalog?.packages ?? [];
 
   // links such as #/admin/pembelian?status=perlu_semakan (Ringkasan) pick the tab
@@ -38,19 +43,24 @@ export function Purchases(p: { query?: Record<string, string> }) {
   const tab = setStatus;
 
   const action = async (row: Row, action: string, payload: Row = {}, okText = 'Pembelian dikemas kini.') => {
-    const r = await act(() => adminApi('POST', `/api/admin/purchases/${row.id}/action`, { action, payload }), okText);
-    if (r) void list.reload();
+    const r = await act(() => adminApi<Row>('POST', `/api/admin/purchases/${row.id}/action`, { action, payload }));
+    if (!r) return;
+    if (r.status === 'perlu_semakan') toast(`${okText} Masih perlu semakan: ${String(r.review_reason ?? '')}`, 'yellow', 8000);
+    else toast(action !== 'assign' && r.status === 'dituntut' && row.status !== 'dituntut' ?`${okText} Pembelian dituntut oleh akaun sedia ada.` : okText, 'green');
+    void list.reload();
   };
 
   const actionsFor = (row: Row) => [
     { label: 'Tetapkan pakej', icon: 'package', run: () => setPkgFor(row) },
+    { label: 'Betulkan maklumat pembeli', icon: 'user-gear', run: () => setBuyerFor(row), hidden: row.status === 'dibatalkan' },
     { label: 'Pindah ke akaun', icon: 'arrows-left-right', run: () => setAssignFor(row), hidden: row.status === 'dibatalkan' },
     {
       label: 'Proses semula order', icon: 'arrows-clockwise',
       run: async () => {
-        const r = await act(() => adminApi<{ ok: boolean; reason?: string }>('POST', `/api/admin/purchases/${row.id}/reprocess`));
+        const r = await act(() => adminApi<{ ok: boolean; reason?: string; result?: unknown }>('POST', `/api/admin/purchases/${row.id}/reprocess`));
         if (!r) return;
-        toast(r.ok ? 'Order diproses semula.' : `Apps Script: ${r.reason ?? 'tidak berjaya'}`, r.ok ? 'green' : 'yellow', 6000);
+        const m = reprocessMessage(r);
+        toast(m.text, m.tone, 8000);
         void list.reload();
       },
     },
@@ -68,7 +78,7 @@ export function Purchases(p: { query?: Record<string, string> }) {
         window.open(waLink(String(row.phone), text), '_blank', 'noopener');
       },
     },
-    { label: 'Pulih', icon: 'arrow-counter-clockwise', hidden: row.status !== 'dibatalkan', run: () => action(row, 'restore', {}, 'Pembelian dipulihkan.') },
+    { label: 'Pulih', icon: 'arrow-counter-clockwise', hidden: row.status !== 'dibatalkan', run: () => setRestoreFor(row) },
     {
       label: 'Batal pembelian', icon: 'prohibit', danger: true, hidden: row.status === 'dibatalkan',
       run: async () => {
@@ -86,6 +96,7 @@ export function Purchases(p: { query?: Record<string, string> }) {
     <AdminShell section="pembelian" title="Pembelian">
       <div class="toolbar">
         <SearchBox placeholder="Cari nama, emel, telefon, no. order" value={q} onSearch={setQ} />
+        <Button sm icon="ph-bold ph-plus" onClick={() => setManual(true)}>Tambah pembelian manual</Button>
         <Select id="pu-batch" ariaLabel="Batch" sm value={batchId} onChange={setBatchId} style="width:auto"
           options={[{ value: '', label: 'Semua batch' }, ...(batches.data ?? []).map((b) => ({ value: String(b.id), label: String(b.name) }))]} />
       </div>
@@ -128,8 +139,33 @@ export function Purchases(p: { query?: Record<string, string> }) {
       </div>
 
       {pkgFor ? (
-        <SetPackage row={pkgFor} pkgs={pkgs} onClose={() => setPkgFor(null)}
-          onSave={async (id) => { setPkgFor(null); await action(pkgFor, 'set_package', { package_id: id }, 'Pakej ditetapkan.'); }} />
+        <SetPackage row={pkgFor} pkgs={pkgs} batches={batches.data ?? []} onClose={() => setPkgFor(null)}
+          onSave={async (payload) => { const row = pkgFor; setPkgFor(null); await action(row, 'set_package', payload, 'Pakej ditetapkan.'); }} />
+      ) : null}
+      {buyerFor ? (
+        <SetBuyer row={buyerFor} batches={batches.data ?? []} onClose={() => setBuyerFor(null)}
+          onSave={async (payload) => { const row = buyerFor; setBuyerFor(null); await action(row, 'set_buyer', payload, 'Maklumat pembeli dikemas kini.'); }} />
+      ) : null}
+      {restoreFor ? (
+        <RestorePurchase row={restoreFor} batches={batches.data ?? []} onClose={() => setRestoreFor(null)}
+          onSave={async (payload) => { const row = restoreFor; setRestoreFor(null); await action(row, 'restore', payload, 'Pembelian dipulihkan.'); }} />
+      ) : null}
+      {manual ? (
+        <ManualPurchase pkgs={pkgs} batches={batches.data ?? []} onClose={() => setManual(false)}
+          onSave={async (body) => {
+            const r = await act(() => adminApi<Row>('POST', '/api/admin/purchases', body));
+            if (!r) return false;
+            toast(r.status === 'dituntut'
+              ? `${String(r.order_ref)} ditambah ke akaun sedia ada pembeli. Emel makluman akan dihantar.`
+              : r.status === 'belum_dituntut'
+                ? `${String(r.order_ref)} disimpan. Emel pendaftaran akan dihantar kepada ${String(r.email)}.`
+                : `${String(r.order_ref)} disimpan tetapi perlu semakan: ${String(r.review_reason ?? '')}`,
+            r.status === 'perlu_semakan' ? 'yellow' : 'green', 8000);
+            setQ(String(r.order_ref));
+            setStatus('');
+            void list.reload();
+            return true;
+          }} />
       ) : null}
       {assignFor ? (
         <Modal title={`Pindah ${String(assignFor.order_ref)} ke akaun`} onClose={() => setAssignFor(null)}>
@@ -141,16 +177,3 @@ export function Purchases(p: { query?: Record<string, string> }) {
   );
 }
 
-function SetPackage(p: { row: Row; pkgs: { id: string; name: string }[]; onClose: () => void; onSave: (id: string) => void }) {
-  const [v, setV] = useState(String(p.row.package_id ?? p.pkgs[0]?.id ?? ''));
-  return (
-    <Modal title={`Tetapkan pakej: ${String(p.row.order_ref)}`} onClose={p.onClose}>
-      <Select id="set-pkg" label="Pakej" value={v} onChange={setV} options={p.pkgs.map((k) => ({ value: k.id, label: k.name }))} />
-      <p class="hint">Hak akses pembelian akan ditetapkan semula mengikut item pakej.</p>
-      <div class="row" style="justify-content:flex-end;margin-top:16px">
-        <Button variant="outline" sm onClick={p.onClose}>Batal</Button>
-        <Button sm disabled={!v} onClick={() => p.onSave(v)}>Simpan</Button>
-      </div>
-    </Modal>
-  );
-}
