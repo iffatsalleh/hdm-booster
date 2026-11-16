@@ -33,12 +33,12 @@ html, body { margin: 0; padding: 0; background: #ffffff; }
 //<![CDATA[
 window.HDM_CONFIG = {
   firebase: {
-    apiKey: 'GANTI_FIREBASE_API_KEY',
-    authDomain: 'GANTI_FIREBASE_PROJECT_ID.firebaseapp.com',
-    projectId: 'GANTI_FIREBASE_PROJECT_ID'
+    apiKey: 'AIzaSyCeOJIYzezwsDlhKUqQ5hwQ5_Fw2y48TgE',
+    authDomain: 'hdm-prod.firebaseapp.com',
+    projectId: 'hdm-prod'
   },
-  apiUrl: 'https://hdm-api.GANTI_AKAUN_CLOUDFLARE.workers.dev',
-  gasUrl: 'https://script.google.com/macros/s/GANTI_ID_DEPLOYMENT_APPS_SCRIPT/exec'
+  apiUrl: 'https://hdm-api.cikgupemasarandotcom.workers.dev',
+  gasUrl: 'https://script.google.com/macros/s/AKfycbxW-8cqQ9lNL8fl1f9g_fWHsOEIHytP9byKMwP8eHOLO3Udeh4f7KUmAXHzfJnC3p8/exec'
 };
 //]]>
 </script>

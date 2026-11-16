@@ -73,7 +73,7 @@ export function BclMap() {
           cols={[
             { key: 'formable_id', label: 'Formable ID', type: 'text', required: true, mono: true },
             { key: 'amount_rm', label: 'Jumlah RM', type: 'number', hint: 'Padanan jumlah bayaran (±RM3).' },
-            { key: 'field_value', label: 'Nilai medan', type: 'text', hint: 'Opsyen: nilai medan pilihan pada borang.' },
+            { key: 'field_value', label: 'Nama produk / pakej', type: 'text', hint: 'Nama produk dalam borang BCL, ejaan sama (huruf besar/kecil tak kisah). Diutamakan berbanding jumlah, jadi diskaun tidak menjejaskan. Biar Jumlah RM kosong.' },
             { key: 'package_id', label: 'Pakej', type: 'select', options: pkgs, required: true },
             { key: 'active', label: 'Aktif', type: 'bool' },
           ]}

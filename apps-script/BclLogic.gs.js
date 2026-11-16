@@ -110,9 +110,52 @@ function paidAtFromTxn(txn, fieldMap) {
   return new Date(ms).toISOString();
 }
 
+function _norm(s) {
+  return String(s === null || s === undefined ? '' : s).trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/** An order line explicitly bought zero times (BCL may list every product of the form with its quantity). */
+function _zeroQty(obj) {
+  var keys = ['quantity', 'qty', 'quantities'];
+  for (var i = 0; i < keys.length; i++) {
+    if (Object.prototype.hasOwnProperty.call(obj, keys[i]) && obj[keys[i]] !== null && obj[keys[i]] !== '' &&
+        Number(obj[keys[i]]) === 0) return true;
+  }
+  return false;
+}
+
+/** Every scalar string/number in the transaction (depth-limited), skipping order lines with quantity 0. */
+function _allTexts(obj, depth, out) {
+  if (depth > 6 || obj === null || obj === undefined) return out;
+  if (typeof obj !== 'object') { out.push(_norm(obj)); return out; }
+  if (!Array.isArray(obj) && _zeroQty(obj)) return out;
+  for (var k in obj) if (Object.prototype.hasOwnProperty.call(obj, k)) _allTexts(obj[k], depth + 1, out);
+  return out;
+}
+
+/**
+ * The texts a field_value row is compared against: the configured BCL_FIELD_MAP field_value paths when set,
+ * otherwise every value in the transaction (BCL sends the chosen product's name inside its order lines, under a
+ * key we have not confirmed, so search them all with exact, whole-value matching).
+ */
+function _packageTexts(txn, fm) {
+  var paths = fm.field_value || [];
+  if (paths.length) {
+    var out = [];
+    for (var i = 0; i < paths.length; i++) {
+      var v = _getPath(txn, paths[i]);
+      if (v !== undefined && v !== null) _allTexts(v, 0, out);
+    }
+    return out;
+  }
+  return _allTexts(txn, 0, []);
+}
+
 /**
  * rows = active bcl_form_map rows: {package_id, formable_id, amount|null, field_value|null}.
- * Order: formable_id (none -> mapped:false), then amount within tolerance, then field value.
+ * Order: formable_id (none -> mapped:false), then the package/product name (field_value; exact, case-insensitive,
+ * so discounts and coupons do not matter), then amount within tolerance (only rows with no field_value).
+ * Two different packages named in one order -> no package (admin resolves).
  */
 function matchPackage(txn, rows, opts) {
   opts = opts || {};
@@ -126,19 +169,29 @@ function matchPackage(txn, rows, opts) {
     if (String(rows[i].formable_id) === String(fid)) cand.push(rows[i]);
   }
   if (cand.length === 0) return { packageId: null, mapped: false };
-  var amt = parseFloat(_pick(txn, fm.amount));
-  var fv = _pick(txn, fm.field_value);
   var j;
-  if (!isNaN(amt)) {
-    for (j = 0; j < cand.length; j++) {
-      if (cand[j].amount !== null && cand[j].amount !== undefined && Math.abs(amt - Number(cand[j].amount)) <= tol) {
-        return { packageId: cand[j].package_id, mapped: true };
+  var named = [];
+  for (j = 0; j < cand.length; j++) if (_norm(cand[j].field_value)) named.push(cand[j]);
+  if (named.length) {
+    var texts = _packageTexts(txn, fm);
+    var set = {};
+    for (j = 0; j < texts.length; j++) set[texts[j]] = true;
+    var hits = {};
+    var hitIds = [];
+    for (j = 0; j < named.length; j++) {
+      if (set[_norm(named[j].field_value)] && !hits[named[j].package_id]) {
+        hits[named[j].package_id] = true;
+        hitIds.push(named[j].package_id);
       }
     }
+    if (hitIds.length === 1) return { packageId: hitIds[0], mapped: true };
+    if (hitIds.length > 1) return { packageId: null, mapped: true };
   }
-  if (fv !== null) {
+  var amt = parseFloat(_pick(txn, fm.amount));
+  if (!isNaN(amt)) {
     for (j = 0; j < cand.length; j++) {
-      if (cand[j].field_value && String(cand[j].field_value).trim().toLowerCase() === String(fv).trim().toLowerCase()) {
+      if (_norm(cand[j].field_value)) continue;
+      if (cand[j].amount !== null && cand[j].amount !== undefined && Math.abs(amt - Number(cand[j].amount)) <= tol) {
         return { packageId: cand[j].package_id, mapped: true };
       }
     }

@@ -52,12 +52,13 @@ describe('findPlaceholders / tomlValue', () => {
     expect(tomlValue(toml, 'FIREBASE_PROJECT_ID')).toBe('hdm-prod');
     expect(tomlValue(toml, 'MISSING')).toBeNull();
   });
-  it('the committed wrangler.toml keeps placeholders and no localhost origin', () => {
+  it('the committed (prod) wrangler.toml is filled in, https-only, with no localhost origin', () => {
     const real = readFileSync(new URL('../../worker/wrangler.toml', import.meta.url), 'utf8');
-    expect(findPlaceholders(real).map((p) => p.key)).toEqual(
-      expect.arrayContaining(['id', 'FIREBASE_PROJECT_ID', 'ALLOWED_ORIGINS', 'GAS_URL']),
-    );
-    expect(tomlValue(real, 'ALLOWED_ORIGINS')).toBe('https://REPLACE.blogspot.com');
+    // Only the REST-fallback key may stay a placeholder once prod is set up.
+    expect(findPlaceholders(real).map((p) => p.key).filter((k) => k !== 'HIVE_DB_ID')).toEqual([]);
+    const origins = String(tomlValue(real, 'ALLOWED_ORIGINS'));
+    expect(origins).not.toMatch(/localhost|127\.0\.0\.1/);
+    expect(originProblems(origins)).toEqual([]);
   });
 });
 

@@ -52,6 +52,39 @@ describe('matchPackage', () => {
     expect(g.matchPackage(txn, rows, { fieldMap: fm })).toEqual({ packageId: 'bundleB', mapped: true });
     expect(g.matchPackage({ formable_id: '80', amount: '10' }, rows, { fieldMap: fm })).toEqual({ packageId: null, mapped: true });
   });
+
+  describe('one form, package by product name (discounts change the price)', () => {
+    const one = [
+      { package_id: 'basic', formable_id: '21460', amount: null, field_value: 'Pakej A - Basic' },
+      { package_id: 'complete', formable_id: '21460', amount: null, field_value: 'Pakej B - Complete' },
+    ];
+    it('finds the product name inside order lines with no field map, at any price', () => {
+      const txn = { formable_id: '21460', amount: '79.00', products: [{ name: 'pakej b -  complete', quantity: 1, price: '79.00' }] };
+      expect(g.matchPackage(txn, one)).toEqual({ packageId: 'complete', mapped: true });
+    });
+    it('ignores order lines with quantity 0', () => {
+      const txn = { formable_id: '21460', amount: '100', items: [
+        { title: 'Pakej A - Basic', qty: 1 }, { title: 'Pakej B - Complete', qty: 0 }] };
+      expect(g.matchPackage(txn, one)).toEqual({ packageId: 'basic', mapped: true });
+    });
+    it('two packages in one order -> no package (admin resolves)', () => {
+      const txn = { formable_id: '21460', items: [{ name: 'Pakej A - Basic', qty: 1 }, { name: 'Pakej B - Complete', qty: 1 }] };
+      expect(g.matchPackage(txn, one)).toEqual({ packageId: null, mapped: true });
+    });
+    it('partial text does not match (exact whole value only)', () => {
+      const txn = { formable_id: '21460', items: [{ name: 'Pakej A - Basic Plus', qty: 1 }] };
+      expect(g.matchPackage(txn, one)).toEqual({ packageId: null, mapped: true });
+    });
+    it('product name wins over a price that equals another package', () => {
+      const mixed = [...one, { package_id: 'basic', formable_id: '21460', amount: 150, field_value: null }];
+      const txn = { formable_id: '21460', amount: '100', items: [{ name: 'Pakej B - Complete', qty: 1 }] };
+      expect(g.matchPackage(txn, mixed)).toEqual({ packageId: 'complete', mapped: true });
+    });
+    it('falls back to amount rows when no product name is found', () => {
+      const mixed = [...one, { package_id: 'basic', formable_id: '21460', amount: 100, field_value: null }];
+      expect(g.matchPackage({ formable_id: '21460', amount: '101.20' }, mixed)).toEqual({ packageId: 'basic', mapped: true });
+    });
+  });
 });
 
 describe('buyerFromTxn', () => {

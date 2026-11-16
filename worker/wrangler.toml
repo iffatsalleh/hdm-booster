@@ -17,14 +17,14 @@ compatibility_flags = ["nodejs_compat"]
 # here, or set the env var CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE before `npx wrangler dev`.
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "REPLACE_WITH_HYPERDRIVE_ID"
+id = "d39dc734f5e34c2fa1209cdd6fad9366"
 
 [vars]
 # REST fallback only (ignored while HYPERDRIVE is bound).
 HIVE_API_BASE = "https://api.hornethive.io/v1"
 HIVE_DB_ID = "REPLACE_WITH_DB_ID"
-FIREBASE_PROJECT_ID = "REPLACE_WITH_FIREBASE_PROJECT_ID"
+FIREBASE_PROJECT_ID = "hdm-prod"
 # Prod: the Blogspot origin ONLY (scheme + host, no path, no trailing slash). Comma-separate extra origins
 # (e.g. a custom domain). Do not add http://localhost here for the deployed Worker.
-ALLOWED_ORIGINS = "https://REPLACE.blogspot.com"
-GAS_URL = "REPLACE_WITH_GAS_WEBAPP_URL"
+ALLOWED_ORIGINS = "https://hdmbooster.blogspot.com"
+GAS_URL = "https://script.google.com/macros/s/AKfycbxW-8cqQ9lNL8fl1f9g_fWHsOEIHytP9byKMwP8eHOLO3Udeh4f7KUmAXHzfJnC3p8/exec"
