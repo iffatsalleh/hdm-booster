@@ -46,7 +46,8 @@ describe('purchase', () => {
     // exactly what Bcl.gs.js processOrder sends
     const body = {
       order_ref: ref, source: 'webhook', package_id: 'basic', name: 'Pembeli  BCL', email,
-      phone, amount: 97, raw: { order_no: ref, status: 3 },
+      // paid inside the seeded batch window: registrable, so exactly one welcome email (0007: none for perlu_semakan)
+      phone, amount: 97, paid_at: '2026-12-05T10:00:00+08:00', raw: { order_no: ref, status: 3 },
     };
     const r1 = await icall('POST', '/internal/purchase', body);
     expect(r1.status).toBe(200);

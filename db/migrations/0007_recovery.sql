@@ -138,8 +138,8 @@ declare
   v_pkg     text := nullif(p->>'package_id', '');
   v_source  text := coalesce(nullif(p->>'source', ''), 'bcl');
   v_reason  text := nullif(p->>'review_reason', '');
-  v_name    text := clean_name(p->>'buyer_name');
-  v_raw     jsonb := nullif(p->'raw', 'null'::jsonb);
+  v_name    text := nullif(btrim(coalesce(p->>'buyer_name', '')), ''); -- as sent (Apps Script already tidies it)
+  v_raw    jsonb := nullif(p->'raw', 'null'::jsonb);
   v_batch   uuid;
   v_problem text;
   v_old     purchases;
