@@ -23,7 +23,7 @@ html, body { margin: 0; padding: 0; background: #ffffff; }
 <link href='https://unpkg.com/@phosphor-icons/web@2.1.2/src/bold/style.css' rel='stylesheet'/>
 <link href='https://unpkg.com/@phosphor-icons/web@2.1.2/src/fill/style.css' rel='stylesheet'/>
 <!-- GANTI_GITHUB_USER dan GANTI_TAG (contoh v20261115-1): baris ini dan baris app.js di bawah -->
-<link href='https://cdn.jsdelivr.net/gh/GANTI_GITHUB_USER/hdm-booster@GANTI_TAG/dist/app.css' rel='stylesheet'/>
+<link href='https://cdn.jsdelivr.net/gh/iffatsalleh/hdm-booster@v20261116-1/dist/app.css' rel='stylesheet'/>
 </head>
 <body>
 <!-- Blogger memerlukan sekurang-kurangnya satu b:section. Ia disembunyikan dan tidak memaparkan apa-apa. -->
@@ -42,6 +42,6 @@ window.HDM_CONFIG = {
 };
 //]]>
 </script>
-<script src='https://cdn.jsdelivr.net/gh/GANTI_GITHUB_USER/hdm-booster@GANTI_TAG/dist/app.js' type='module'></script>
+<script src='https://cdn.jsdelivr.net/gh/iffatsalleh/hdm-booster@v20261116-1/dist/app.js' type='module'></script>
 </body>
 </html>
