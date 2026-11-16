@@ -1,10 +1,16 @@
-// Welcome-email queue. The Worker owns email_queue; we only send and report status.
+// Purchase email queue. The Worker owns email_queue; we only render by kind, send and report status.
+//   purchase_welcome  registrable purchase: register with the same email + phone
+//   purchase_added    purchase auto-claimed for an existing account: access added, log in
+
+function appBase_() {
+  return requireProp('APP_URL').replace(/#.*$/, '');
+}
 
 function welcomeEmail(item) {
   var p = item.payload || {};
   var name = p.name || item.name || 'Pelanggan';
   var pkg = p.package_name || p.package || item.package_name || 'HDM Booster';
-  var link = requireProp('APP_URL').replace(/#.*$/, '') + '#/daftar';
+  var link = appBase_() + '#/daftar';
   var body = [
     'Salam ' + name + ',',
     '',
@@ -23,7 +29,35 @@ function welcomeEmail(item) {
   return { subject: 'Selamat datang ke ' + pkg + ' - daftar akaun anda', body: body };
 }
 
-/** Trigger entry (every 30 min): takes the script lock, then runs the queue. */
+/** Repeat buyer: the purchase was added to the account that already uses this email + phone. */
+function addedEmail(item) {
+  var p = item.payload || {};
+  var name = p.name || item.name || 'Pelanggan';
+  var pkg = p.package_name || p.package || item.package_name || 'HDM Booster';
+  var body = [
+    'Salam ' + name + ',',
+    '',
+    'Akses baharu telah ditambah ke akaun anda: ' + pkg + (p.order_ref ? ' (order ' + p.order_ref + ')' : '') + '.',
+    '',
+    'Anda tidak perlu mendaftar semula. Log masuk dengan akaun sedia ada di pautan ini:',
+    appBase_() + '#/masuk',
+    '',
+    'Kandungan baharu akan dipaparkan dalam aplikasi selepas anda log masuk.',
+    '',
+    'Jika perlukan bantuan, hubungi kami di WhatsApp: https://wa.me/' + SUPPORT_WA,
+    '',
+    'Terima kasih,',
+    'Pasukan HDM Booster'
+  ].join('\n');
+  return { subject: 'Akses baharu telah ditambah ke akaun anda - HDM Booster', body: body };
+}
+
+/** Text for a queued item by kind (unknown kinds fall back to the welcome text). */
+function renderEmail(item) {
+  return item && item.kind === 'purchase_added' ? addedEmail(item) : welcomeEmail(item);
+}
+
+/** Trigger entry (every 30 min): waits up to 30 s for the script lock, then runs the queue. */
 function processEmailQueueTrigger() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) return;
@@ -34,7 +68,22 @@ function processEmailQueueTrigger() {
   }
 }
 
-/** Unlocked inner worker: callers must hold the script lock (processOrder does). */
+/**
+ * One NON-blocking attempt right after a new purchase (webhook / poll / reprocess): if another run holds the
+ * lock, skip; the trigger sends the email within 30 minutes. Never delays the webhook answer on a busy lock.
+ */
+function tryProcessEmailQueueNow_() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(0)) return false;
+  try {
+    processEmailQueue_();
+  } finally {
+    lock.releaseLock();
+  }
+  return true;
+}
+
+/** Unlocked inner worker: callers must hold the script lock (the two functions above). */
 function processEmailQueue_() {
   var items = workerData('GET', '/internal/email-queue?limit=20');
   var list = (items && items.items) || items || [];
@@ -44,7 +93,7 @@ function processEmailQueue_() {
     var sent = false;
     var failMsg = null;
     try {
-      var m = welcomeEmail(it);
+      var m = renderEmail(it);
       MailApp.sendEmail({ to: it.to_email || it.email, subject: m.subject, body: m.body, name: 'HDM Booster' });
       sent = true;
     } catch (err) {

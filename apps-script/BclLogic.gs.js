@@ -149,3 +149,43 @@ function matchPackage(txn, rows, opts) {
   }
   return { packageId: null, mapped: true };
 }
+
+/**
+ * Poll orchestration (pure: BCL, Worker and processing are injected). Reads list pages newest first
+ * (page 1, 2, ... up to maxPages) and processes the paid refs the Worker does not know yet. Stops after a page whose
+ * paid refs were all known (older pages were handled by earlier polls), on an empty or short page, or at maxPages.
+ *   fetchPage(page, perPage) -> transactions; knownRefs(refs) -> refs already known; processRef(ref)
+ */
+function pollBclPages(fetchPage, knownRefs, processRef, opts) {
+  opts = opts || {};
+  var maxPages = opts.maxPages || 5;
+  var perPage = opts.perPage || 100;
+  var fm = opts.fieldMap || defaultFieldMap();
+  var processed = [];
+  var pages = 0;
+  for (var page = 1; page <= maxPages; page++) {
+    var list = fetchPage(page, perPage) || [];
+    pages = page;
+    var paid = [];
+    var seen = {};
+    for (var i = 0; i < list.length; i++) {
+      if (!isPaidLive(list[i])) continue;
+      var ref = extractOrderRef(list[i], fm);
+      if (ref && !seen[ref]) { seen[ref] = true; paid.push(ref); }
+    }
+    var unknown = [];
+    if (paid.length) {
+      var known = knownRefs(paid) || [];
+      var knownSet = {};
+      for (var k = 0; k < known.length; k++) knownSet[known[k]] = true;
+      for (var j = 0; j < paid.length; j++) if (!knownSet[paid[j]]) unknown.push(paid[j]);
+    }
+    for (var u = 0; u < unknown.length; u++) {
+      processRef(unknown[u]);
+      processed.push(unknown[u]);
+    }
+    if (list.length < perPage) break;
+    if (paid.length && !unknown.length) break;
+  }
+  return { pages: pages, processed: processed };
+}

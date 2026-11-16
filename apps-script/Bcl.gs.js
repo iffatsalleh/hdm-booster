@@ -20,23 +20,21 @@ function fetchBclTransaction(orderRef) {
   return unwrapTxn(bclGet('/transactions/' + encodeURIComponent(orderRef)));
 }
 
-function fetchRecentBclTransactions(limit) {
-  var j = bclGet('/transactions?per_page=' + limit + '&sort=-id');
+/** One page of the BCL transaction list, newest first (page 1 = newest). */
+function fetchBclTransactionsPage(page, perPage) {
+  var j = bclGet('/transactions?per_page=' + perPage + '&sort=-id&page=' + page);
   var list = Array.isArray(j) ? j : (j.data && Array.isArray(j.data) ? j.data : (j.data && j.data.data) || []);
   return list;
 }
 
-function withScriptLock(fn) {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) throw new Error('lock busy');
-  try {
-    return fn();
-  } finally {
-    lock.releaseLock();
-  }
-}
+/** Pages the time trigger may walk back through when many orders arrive between two polls. */
+var POLL_MAX_PAGES = 5;
 
-/** Verify with BCL, match package, forward to the Worker. Idempotent on the Worker side (order_ref unique). */
+/**
+ * Verify with BCL, match package, forward to the Worker. No script lock: the Worker side is idempotent
+ * (order_ref unique; upsert_purchase only re-evaluates rows still under review), so concurrent webhooks, polls and
+ * admin reprocesses never wait on each other. Returns the Worker response, or {ok:false, reason}.
+ */
 function processOrder(orderRef, source) {
   var fm = fieldMap();
   var txn = fetchBclTransaction(orderRef);
@@ -64,16 +62,23 @@ function processOrder(orderRef, source) {
     paid_at: paidAtFromTxn(txn, fm), // null => Worker uses receipt time
     raw: txn
   });
-  logBcl(orderRef, r && r.ok ? 'processed' : 'error', (r && (r.reason || '')) + ' (' + source + ')', r && r.ok ? null : txn);
-  if (r && r.ok) {
-    try { processEmailQueue_(); } catch (e) { console.error('email queue: ' + e); }
+  var d = (r && r.ok && r.data) || {};
+  var outcome = r && r.ok
+    ? 'status ' + d.status + (d.inserted ? ' (baharu)' : d.reevaluated ? (d.changed ? ' (dinilai semula, berubah)' : ' (dinilai semula, tiada perubahan)') : ' (sedia ada)')
+    : (r && (r.reason || '')) || '';
+  logBcl(orderRef, r && r.ok ? 'processed' : 'error', outcome + ' (' + source + ')', r && r.ok ? null : txn);
+  // a new or newly registrable purchase queued an email: one non-blocking send attempt (the trigger is the backstop)
+  if (r && r.ok && (d.inserted || d.changed)) {
+    try { tryProcessEmailQueueNow_(); } catch (e) { console.error('email queue: ' + e); }
   }
   return r;
 }
 
 /** Webhook entry. Always answers 200 JSON after validating the key; the order is re-verified against BCL. */
 function handleBclWebhook(e) {
-  if (!e.parameter || e.parameter.k !== prop('BCL_WEBHOOK_KEY') || !prop('BCL_WEBHOOK_KEY')) {
+  var key = prop('BCL_WEBHOOK_KEY');
+  var given = e.parameter && typeof e.parameter.k === 'string' ? e.parameter.k : '';
+  if (!key || !_safeEqual(given, key)) {
     return jsonOut({ ok: false, reason: 'forbidden' });
   }
   var raw = (e.postData && e.postData.contents) || '';
@@ -83,7 +88,7 @@ function handleBclWebhook(e) {
     return jsonOut({ ok: false, reason: 'no_order_ref' });
   }
   try {
-    var r = withScriptLock(function () { return processOrder(ref, 'webhook'); });
+    var r = processOrder(ref, 'webhook');
     return jsonOut({ ok: true, result: r && r.ok ? 'processed' : (r && r.reason) });
   } catch (err) {
     logBcl(ref, 'error', String(err));
@@ -91,35 +96,40 @@ function handleBclWebhook(e) {
   }
 }
 
-/** Worker-initiated reprocess (admin button). Body already HMAC-verified by the router. */
+/**
+ * Worker-initiated reprocess (Admin "Proses semula"). Body already HMAC-verified by the router. Always evaluates
+ * the order again (force), also a ref the poll treats as known because it was 'ignored' before; the new outcome
+ * is logged by processOrder.
+ */
 function reprocessOrder(body) {
   var ref = body && body.order_ref;
   if (!ref) return jsonOut({ ok: false, reason: 'bad_request' });
-  var r = withScriptLock(function () { return processOrder(String(ref), 'reprocess'); });
+  var r;
+  try {
+    r = processOrder(String(ref), 'reprocess');
+  } catch (err) {
+    logBcl(String(ref), 'error', 'reprocess: ' + err);
+    return jsonOut({ ok: false, reason: 'error', result: null });
+  }
   return jsonOut({ ok: !!(r && r.ok), result: r });
 }
 
-/** Time trigger every 10 min: safety net for missed webhooks. */
+/**
+ * Time trigger every 10 min: safety net for missed webhooks. Walks back up to POLL_MAX_PAGES pages of 100 until a
+ * page whose paid refs are all known. CONTRACT: /internal/known-orders returns refs that exist in purchases OR are
+ * logged with kind 'ignored' (unmapped forms), so the poll does not re-fetch them (recover those from Admin).
+ */
 function pollBcl() {
-  withScriptLock(function () {
-    var fm = fieldMap();
-    var list = fetchRecentBclTransactions(100);
-    var paid = [];
-    for (var i = 0; i < list.length; i++) {
-      if (!isPaidLive(list[i])) continue;
-      var ref = extractOrderRef(list[i], fm);
-      if (ref) paid.push(ref);
-    }
-    if (!paid.length) return;
-    // CONTRACT: /internal/known-orders returns refs that exist in purchases OR are logged in bcl_webhook_log
-    // with kind 'ignored' (unmapped forms, logged by processOrder with order_ref), so polling doesn't re-fetch them.
-    var known = workerData('POST', '/internal/known-orders', { refs: paid });
-    var knownSet = {};
-    var kl = (known && known.refs) || known || [];
-    for (var k = 0; k < kl.length; k++) knownSet[kl[k]] = true;
-    for (var j = 0; j < paid.length; j++) {
-      if (knownSet[paid[j]]) continue;
-      try { processOrder(paid[j], 'poll'); } catch (err) { logBcl(paid[j], 'error', 'poll: ' + err); }
-    }
-  });
+  var fm = fieldMap();
+  return pollBclPages(
+    fetchBclTransactionsPage,
+    function (refs) {
+      var known = workerData('POST', '/internal/known-orders', { refs: refs });
+      return (known && known.refs) || known || [];
+    },
+    function (ref) {
+      try { processOrder(ref, 'poll'); } catch (err) { logBcl(ref, 'error', 'poll: ' + err); }
+    },
+    { maxPages: POLL_MAX_PAGES, perPage: 100, fieldMap: fm }
+  );
 }
