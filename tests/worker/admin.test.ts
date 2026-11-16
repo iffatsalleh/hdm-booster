@@ -254,3 +254,89 @@ describe('audit', () => {
     expect(await auditCount(actor)).toBe(0);
   });
 });
+
+describe('recovery routes (0007)', () => {
+  const sign = async (payload: string, t: number, sig: string) =>
+    verifySigHeader(INTERNAL_SECRET, `t=${t},v1=${sig}`, payload, Math.floor(Date.now() / 1000));
+
+  test('POST /api/admin/purchases: manual purchase (validated, audited); bad input -> 400 with a BM reason', async () => {
+    const actor = await staff('superadmin');
+    const batch = (await q(`select id from batches order by sales_open_at desc limit 1`))[0].id as string;
+    const email = `test_${rnd()}@example.test`;
+    const res = await call(app, 'POST', '/api/admin/purchases', {
+      uid: actor, body: { package_id: 'basic', batch_id: batch, buyer_name: 'Pembeli Manual', email, phone: '012-111 2233', amount_rm: 97, evil: 1 },
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    const row = (await res.json()).data;
+    track.orderRef(row.order_ref);
+    expect(row).toMatchObject({ source: 'manual', email, phone: '60121112233', package_id: 'basic', batch_id: batch });
+    expect(row.order_ref).toMatch(/^MANUAL-\d{8}-[A-Z0-9]{6}$/);
+    expect(await auditCount(actor)).toBe(1);
+    for (const [body, reason] of [
+      [{ package_id: 'basic', buyer_name: 'X', email: 'nope', phone: '0121112233' }, 'emel_tidak_sah'],
+      [{ package_id: 'basic', buyer_name: 'X', email, phone: '12' }, 'telefon_tidak_sah'],
+      [{ package_id: 'basic', buyer_name: 'X', email, phone: '0121112233', batch_id: 'not-a-uuid' }, 'batch_tidak_wujud'],
+      [{ package_id: 'basic', buyer_name: 'X', email, phone: '0121112233', amount_rm: 'abc' }, 'jumlah_tidak_sah'],
+      [{ package_id: 'basic', email, phone: '0121112233' }, 'nama_diperlukan'],
+    ] as const) {
+      const bad = await call(app, 'POST', '/api/admin/purchases', { uid: actor, body });
+      expect(bad.status, reason).toBe(400);
+      const j = await bad.json();
+      expect(j.reason).toBe(reason);
+      expect(j.message).not.toBe('Ralat pada pelayan. Sila cuba lagi sebentar lagi.');
+    }
+    expect(await auditCount(actor)).toBe(1);
+  });
+
+  test('set_buyer via the action route; invalid phone -> 400 telefon_tidak_sah', async () => {
+    const actor = await staff('superadmin');
+    const ref = await unclaimedPurchase(`test_${rnd()}@example.test`, randomPhone());
+    const pid = (await q('select id from purchases where order_ref = $1', [ref]))[0].id as string;
+    const bad = await call(app, 'POST', `/api/admin/purchases/${pid}/action`, { uid: actor, body: { action: 'set_buyer', payload: { email: `test_${rnd()}@example.test`, phone: '1' } } });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).reason).toBe('telefon_tidak_sah');
+    const email = `test_${rnd()}@example.test`;
+    const okRes = await call(app, 'POST', `/api/admin/purchases/${pid}/action`, { uid: actor, body: { action: 'set_buyer', payload: { buyer_name: 'Baru', email, phone: '0139998877' } } });
+    expect(okRes.status).toBe(200);
+    expect((await okRes.json()).data).toMatchObject({ email, phone: '60139998877', buyer_name: 'Baru' });
+  });
+
+  test('GET /api/admin/orders/orphans lists ignored orders without a purchase', async () => {
+    const actor = await staff('superadmin');
+    const ref = `test_orph_${rnd()}`;
+    track.orderRef(ref);
+    await q(`insert into bcl_webhook_log (order_ref, kind, ok, message) values ($1, 'ignored', false, 'form not in bcl_form_map (webhook)')`, [ref]);
+    const res = await call(app, 'GET', '/api/admin/orders/orphans', { uid: actor });
+    expect(res.status).toBe(200);
+    const rows = (await res.json()).data as any[];
+    expect(rows.find((r) => r.order_ref === ref)).toMatchObject({ kind: 'ignored', attempts: 1 });
+    expect((await call(app, 'GET', '/api/admin/orders/orphans?offset=-1', { uid: actor })).status).toBe(400);
+  });
+
+  test('POST /api/admin/orders/:ref/reprocess: signed {action, order_ref, force} to Apps Script + one audit row', async () => {
+    const actor = await staff('superadmin');
+    const ref = `test_orph_${rnd()}`;
+    track.orderRef(ref);
+    const before = gasCalls.length;
+    const res = await call(app, 'POST', `/api/admin/orders/${encodeURIComponent(ref)}/reprocess`, { uid: actor });
+    expect(res.status).toBe(200);
+    expect((await res.json()).data).toEqual({ ok: true, result: { ok: true } });
+    expect(gasCalls.length).toBe(before + 1);
+    const sent = JSON.parse(gasCalls.at(-1)!.body);
+    expect(JSON.parse(sent.payload)).toEqual({ action: 'reprocess', order_ref: ref, force: true });
+    expect(await sign(sent.payload, sent.t, sent.sig)).toBe(true);
+    const a = await q(`select action, target_type, target_id from audit_logs where actor = $1`, [actor]);
+    expect(a).toEqual([{ action: 'order.reprocess', target_type: 'order', target_id: ref }]);
+    const long = await call(app, 'POST', `/api/admin/orders/${'x'.repeat(201)}/reprocess`, { uid: actor });
+    expect(long.status).toBe(400);
+    expect(gasCalls.length).toBe(before + 1);
+  });
+
+  test('order reprocess: Apps Script unreachable -> 502 gas_gagal', async () => {
+    const actor = await staff('superadmin');
+    const broken = makeApp({ fetch: (async () => { throw new Error('down'); }) as typeof fetch });
+    const res = await call(broken, 'POST', '/api/admin/orders/test_x_down/reprocess', { uid: actor });
+    expect(res.status).toBe(502);
+    expect((await res.json()).reason).toBe('gas_gagal');
+  });
+});

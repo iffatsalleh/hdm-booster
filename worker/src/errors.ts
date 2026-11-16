@@ -38,6 +38,12 @@ export const MSG = {
   gagal_jana_kod: 'Gagal menjana kod. Sila cuba lagi.',
   tiada_jadual: 'Jadual tidak dikenali.',
   gas_gagal: 'Apps Script tidak dapat dihubungi. Sila cuba lagi sebentar lagi.',
+  emel_tidak_sah: 'Emel tidak sah. Semak semula emel pembeli.',
+  telefon_tidak_sah: 'Nombor telefon tidak sah. Guna nombor telefon bimbit Malaysia, contoh 0123456789.',
+  batch_tidak_wujud: 'Batch tidak dijumpai. Pilih batch daripada senarai.',
+  nama_diperlukan: 'Sila isi nama pembeli.',
+  jumlah_tidak_sah: 'Jumlah RM tidak sah. Contoh: 97 atau 97.50.',
+  order_tidak_sah: 'Nombor order tidak sah.',
 } as const;
 
 export type FailStatus = 400 | 401 | 403 | 404 | 409 | 413 | 429 | 500 | 502;
@@ -46,6 +52,7 @@ export type FailStatus = 400 | 401 | 403 | 404 | 409 | 413 | 429 | 500 | 502;
 const SQL_REASONS = [
   'pengguna_tidak_wujud', 'item_tidak_sah', 'pakej_tidak_wujud', 'tindakan_tidak_sah', 'kod_tidak_wujud',
   'kod_belum_digunakan', 'pembelian_tidak_wujud', 'geran_tidak_wujud', 'geran_sudah_ditarik', 'bilangan_tidak_sah',
+  'emel_tidak_sah', 'telefon_tidak_sah', 'batch_tidak_wujud', 'nama_diperlukan', 'jumlah_tidak_sah',
 ] as const;
 
 /** SQLSTATE of a pg error (`.code`) or of a HornetHive REST error (`hive: msg [CODE] ...`). */

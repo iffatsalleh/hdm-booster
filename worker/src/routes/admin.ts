@@ -132,6 +132,29 @@ export function adminRoutes(deps: Deps) {
       ]));
     }));
 
+  /**
+   * Signed reprocess request to Apps Script (doPost src:'worker'; Apps Script cannot read headers, so the signature
+   * travels in the body, see apps-script/Router.gs.js). Returns its JSON, or null when it cannot be reached.
+   */
+  const gasReprocess = async (payloadObj: Record<string, unknown>): Promise<{ ok?: unknown; result?: unknown; reason?: unknown } | null> => {
+    const payload = JSON.stringify(payloadObj);
+    const t = Math.floor(deps.now() / 1000);
+    const sig = await signHmac(deps.secrets.internal, t, payload);
+    try {
+      const res = await (deps.fetch ?? fetch)(deps.gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ src: 'worker', t, sig, payload }),
+        redirect: 'follow',
+      });
+      const j = await res.json();
+      return (j && typeof j === 'object' ? j : {}) as { ok?: unknown; result?: unknown; reason?: unknown };
+    } catch (e) {
+      console.error('reprocess: apps script call failed', e instanceof Error ? e.message : String(e));
+      return null;
+    }
+  };
+
   r.post('/purchases/:id/reprocess', sa, async (c) =>
     run(c, async () => {
       const id = c.req.param('id');
@@ -142,28 +165,56 @@ export function adminRoutes(deps: Deps) {
         [actor(c), id],
       );
       if (!pu.order_ref) return fail(c, 404, 'pembelian_tidak_wujud');
-      // Apps Script cannot read headers: the signature travels in the body (see apps-script/Router.gs.js).
-      const payload = JSON.stringify({ action: 'reprocess', order_ref: pu.order_ref });
-      const t = Math.floor(deps.now() / 1000);
-      const sig = await signHmac(deps.secrets.internal, t, payload);
-      let result: unknown;
-      try {
-        const res = await (deps.fetch ?? fetch)(deps.gasUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ src: 'worker', t, sig, payload }),
-          redirect: 'follow',
-        });
-        result = await res.json();
-      } catch (e) {
-        console.error('reprocess: apps script call failed', e instanceof Error ? e.message : String(e));
-        return fail(c, 502, 'gas_gagal');
-      }
-      const g = (result && typeof result === 'object' ? result : {}) as { ok?: unknown; result?: unknown; reason?: unknown };
+      const g = await gasReprocess({ action: 'reprocess', order_ref: pu.order_ref });
+      if (!g) return fail(c, 502, 'gas_gagal');
       await deps.hive.json(
         `select jsonb_build_object('ok', true) as r
            from (select log_audit($1, 'purchase.reprocess', 'purchase', $2, $3::jsonb)) x`,
         [actor(c), id, JSON.stringify({ order_ref: pu.order_ref, gas_ok: g.ok === true, reason: g.reason ?? null })],
+      );
+      return ok(c, { ok: g.ok === true, result: g.result ?? null, ...(g.reason ? { reason: g.reason } : {}) });
+    }));
+
+  /** Manual purchase (buyer paid outside BCL): admin_add_purchase validates and normalises; one audit row. */
+  r.post('/purchases', sa, async (c) =>
+    run(c, async () => {
+      const body = await readBody(c);
+      if (!body) return fail(c, 400, 'data_tidak_sah');
+      const s = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : typeof v === 'number' ? String(v) : null);
+      const p = {
+        package_id: s(body.package_id, 50),
+        batch_id: s(body.batch_id, 64),
+        buyer_name: s(body.buyer_name, 200),
+        email: s(body.email, 200),
+        phone: s(body.phone, 40),
+        amount_rm: s(body.amount_rm, 20),
+      };
+      return ok(c, await deps.hive.json('select admin_add_purchase($1, $2::jsonb) as r', [actor(c), JSON.stringify(p)]));
+    }));
+
+  /** BCL orders logged as ignored / error that never became a purchase (Admin › Pemetaan BCL). */
+  r.get('/orders/orphans', sa, async (c) =>
+    run(c, async () => {
+      const offset = parseOffset(c.req.query('offset'));
+      if (offset === null) return fail(c, 400, 'data_tidak_sah');
+      return ok(c, await deps.hive.json('select admin_orphan_orders($1, $2::int) as r', [actor(c), offset]));
+    }));
+
+  /** Re-runs an order by its BCL ref, also one that was ignored before (force): Apps Script logs the new outcome. */
+  r.post('/orders/:orderRef/reprocess', sa, async (c) =>
+    run(c, async () => {
+      const ref = (c.req.param('orderRef') ?? '').trim();
+      if (!ref || ref.length > 200 || /[\u0000-\u001f]/.test(ref)) return fail(c, 400, 'order_tidak_sah');
+      // re-check the role in SQL like every admin function (the route guard already did)
+      const who = await deps.hive.json<{ ok: boolean }>(
+        `select jsonb_build_object('ok', 'superadmin' = any(roles_for($1))) as r`, [actor(c)]);
+      if (!who.ok) return fail(c, 403, 'tiada_kebenaran');
+      const g = await gasReprocess({ action: 'reprocess', order_ref: ref, force: true });
+      if (!g) return fail(c, 502, 'gas_gagal');
+      await deps.hive.json(
+        `select jsonb_build_object('ok', true) as r
+           from (select log_audit($1, 'order.reprocess', 'order', $2, $3::jsonb)) x`,
+        [actor(c), ref, JSON.stringify({ gas_ok: g.ok === true, reason: g.reason ?? null })],
       );
       return ok(c, { ok: g.ok === true, result: g.result ?? null, ...(g.reason ? { reason: g.reason } : {}) });
     }));

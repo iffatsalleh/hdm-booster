@@ -64,6 +64,19 @@ describe('purchase', () => {
     expect(await q(`select 1 from email_queue where ref_id = (select id::text from purchases where order_ref = $1)`, [ref])).toHaveLength(1);
   });
 
+  test('re-sent perlu_semakan order is re-evaluated (0007): reevaluated/changed/status in the response', async () => {
+    const ref = newRef();
+    const email = `test_${rnd()}@example.test`;
+    const body = { order_ref: ref, source: 'webhook', package_id: 'basic', name: 'B', email, phone: '123', amount: 97,
+      paid_at: '2026-12-05T10:00:00+08:00' };
+    const a = (await (await icall('POST', '/internal/purchase', body)).json()).data;
+    expect(a).toMatchObject({ inserted: true, reevaluated: false, status: 'perlu_semakan' });
+    const b = (await (await icall('POST', '/internal/purchase', { ...body, source: 'reprocess', phone: randomPhone() })).json()).data;
+    expect(b).toMatchObject({ inserted: false, reevaluated: true, changed: true, status: 'belum_dituntut', previous_status: 'perlu_semakan' });
+    const c = (await (await icall('POST', '/internal/purchase', { ...body, source: 'reprocess' })).json()).data;
+    expect(c).toMatchObject({ inserted: false, reevaluated: false, changed: false, status: 'belum_dituntut' });
+  });
+
   test('paid_at from the body is stored when it parses; otherwise receipt time', async () => {
     const base = { source: 'webhook', package_id: 'basic', name: 'P', email: `test_${rnd()}@example.test`, phone: randomPhone(), amount: 97 };
     const withPaid = newRef();

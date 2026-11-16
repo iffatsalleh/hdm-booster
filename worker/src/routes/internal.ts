@@ -54,7 +54,11 @@ export function internalRoutes(deps: Deps) {
          from bcl_form_map m where m.active`,
     )));
 
-  /** Refs already handled: present in purchases, or logged with kind exactly 'ignored' (unmapped form). */
+  /**
+   * Refs already handled: present in purchases, or logged with kind exactly 'ignored' (unmapped form), so the
+   * 10-minute poll stays quiet about them. Recovery is explicit: Admin › Pemetaan BCL › "Order tanpa pembelian"
+   * › Proses semula (POST /api/admin/orders/:orderRef/reprocess) makes Apps Script evaluate the order again.
+   */
   r.post('/known-orders', async (c) => {
     const body = await readBody(c);
     const refs = Array.isArray(body?.refs) ? body!.refs : null;
@@ -90,10 +94,16 @@ export function internalRoutes(deps: Deps) {
       raw: b.raw === undefined ? null : b.raw,
     };
     if (p.amount_rm !== null && !/^\d+(\.\d+)?$/.test(p.amount_rm)) p.amount_rm = null;
+    // previous_status is read before the call: a re-evaluated 'perlu_semakan' row reports what it became.
     const res = await deps.hive.json<{ inserted: boolean; id: string; status: string }>(
-      `select jsonb_build_object('inserted', x->'inserted', 'id', x->'row'->'id', 'status', x->'row'->'status') as r
+      `with prev as (select status from purchases where order_ref = $2)
+       select jsonb_build_object('inserted', x->'inserted', 'id', x->'row'->'id', 'status', x->'row'->'status',
+                                 'reevaluated', coalesce(x->'reevaluated', 'false'::jsonb),
+                                 'changed', coalesce(x->'changed', 'false'::jsonb),
+                                 'previous_status', (select status from prev),
+                                 'review_reason', x->'row'->'review_reason') as r
          from upsert_purchase($1::jsonb) x`,
-      [JSON.stringify(p)],
+      [JSON.stringify(p), ref],
     );
     return ok(c, res);
   });
