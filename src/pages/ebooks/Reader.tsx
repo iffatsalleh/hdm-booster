@@ -7,7 +7,8 @@ import { ApiError, bm } from '../../lib/errors';
 import { forgetEbook, loadEbook } from '../../lib/ebookCache';
 import { openPdf, type PdfDoc } from '../../lib/pdf';
 import {
-  createDebouncer, drawWatermark, ebookFilename, ebookNo, noteProgress, recentProgress, rememberPages, watermarkText,
+  createDebouncer, drawWatermark, ebookFilename, ebookNo, noteProgress, openEbookDoc, recentProgress, rememberPages,
+  watermarkText,
 } from '../../lib/reader';
 import { useSession, type CatalogEbook } from '../../state/session';
 import { Layout } from '../../ui/Layout';
@@ -29,7 +30,6 @@ type Stage =
 
 const SAVE_MS = 2000;
 const ZOOMS = [1, 1.25, 1.5, 2, 2.5];
-const OPEN_FAILED = 'Ebook tidak dapat dibuka. Sila cuba lagi.';
 const progressPath = (id: string) => `/api/ebook/${encodeURIComponent(id)}/progress`;
 
 export function Reader({ id }: { id: string }) {
@@ -65,21 +65,16 @@ export function Reader({ id }: { id: string }) {
         const updatedAt = first.updatedAt ?? e?.file_updated_at ?? null;
         const buf = await loadEbook(id, updatedAt, getTicket, (p) => live && setStage({ k: 'loading', ...p }));
         if (!live) return;
-        try {
-          doc = await openPdf(buf);
-        } catch (err) {
-          // a cached file pdf.js cannot parse must not be served again
-          if ((err as { name?: string })?.name === 'InvalidPDFException') await forgetEbook(id);
-          throw new ApiError('ralat_pelayan', OPEN_FAILED);
+        // destroys the pdf.js doc itself when we unmount mid-way; any open failure drops the cached file
+        const opened = await openEbookDoc(buf, { open: openPdf, forget: () => forgetEbook(id), live: () => live });
+        if (!opened) return;
+        if (!live) {
+          void opened.doc.destroy();
+          return;
         }
-        const sizes: Size[] = [];
-        for (let i = 1; i <= doc.numPages; i++) {
-          const v = (await doc.getPage(i)).getViewport({ scale: 1 });
-          sizes.push({ w: v.width, h: v.height });
-        }
-        if (!live) return;
+        doc = opened.doc;
         rememberPages(id, doc.numPages);
-        setStage({ k: 'ready', doc, buf, allowDownload: first.allowDownload === true, sizes });
+        setStage({ k: 'ready', doc, buf, allowDownload: first.allowDownload === true, sizes: opened.sizes });
       } catch (err) {
         if (live) setStage({ k: 'error', msg: bm(err) });
       }

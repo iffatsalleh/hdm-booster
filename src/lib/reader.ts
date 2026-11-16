@@ -1,4 +1,5 @@
 // Pure helpers for the ebook library + reader (unit-tested): watermark text/layout, debounce, names.
+import { ApiError } from './errors';
 
 export const WM_ALPHA = 0.12;
 const WM_ANGLE = -Math.PI / 6; // -30deg, like the mockup
@@ -127,4 +128,61 @@ export function noteProgress(id: string, last_page: number, finished: boolean) {
 }
 export function recentProgress(id: string) {
   return recent.get(id) ?? null;
+}
+
+// ---------------- open a PDF for the reader ----------------
+export const OPEN_FAILED = 'Ebook tidak dapat dibuka. Sila cuba lagi.';
+
+type PageLike = { getViewport(o: { scale: number }): { width: number; height: number } };
+type DocLike = { numPages: number; getPage(i: number): Promise<PageLike>; destroy(): unknown };
+
+/**
+ * Opens the PDF and reads every page size (scale 1). `live()` false (the reader unmounted or the id changed) at any
+ * await -> the pdf.js document is destroyed and null is returned, so no worker / memory is left behind. ANY failure
+ * (open or a page) drops the cached file (`forget`, its own errors ignored) and throws the BM error.
+ */
+export async function openEbookDoc<D extends DocLike>(
+  buf: ArrayBuffer,
+  o: { open: (buf: ArrayBuffer) => Promise<D>; forget: () => Promise<void>; live: () => boolean },
+): Promise<{ doc: D; sizes: { w: number; h: number }[] } | null> {
+  const failed = async () => {
+    try {
+      await o.forget();
+    } catch {
+      // the cache may already be gone; the error shown is the same
+    }
+    return new ApiError('ralat_pelayan', OPEN_FAILED);
+  };
+  let doc: D;
+  try {
+    doc = await o.open(buf);
+  } catch {
+    throw await failed();
+  }
+  const drop = () => {
+    try {
+      void Promise.resolve(doc.destroy()).catch(() => undefined);
+    } catch {
+      // destroy() threw synchronously: nothing else to release
+    }
+  };
+  if (!o.live()) {
+    drop();
+    return null;
+  }
+  const sizes: { w: number; h: number }[] = [];
+  try {
+    for (let i = 1; i <= doc.numPages; i++) {
+      const v = (await doc.getPage(i)).getViewport({ scale: 1 });
+      if (!o.live()) {
+        drop();
+        return null;
+      }
+      sizes.push({ w: v.width, h: v.height });
+    }
+  } catch {
+    drop();
+    throw await failed();
+  }
+  return { doc, sizes };
 }

@@ -96,3 +96,71 @@ describe('ebook helpers', () => {
     expect(pdfModuleUrl('4.10.38')).toBe('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/pdf.min.mjs');
   });
 });
+
+describe('openEbookDoc (Reader open + page sizes)', () => {
+  type Doc = { numPages: number; destroyed: number; getPage(i: number): Promise<{ getViewport(o: { scale: number }): { width: number; height: number } }>; destroy(): Promise<void> };
+  const fakeDoc = (n: number, opts: { failPage?: number; onPage?: (i: number) => void } = {}): Doc => {
+    const d: Doc = {
+      numPages: n,
+      destroyed: 0,
+      async getPage(i) {
+        opts.onPage?.(i);
+        if (i === opts.failPage) throw new Error('bad page');
+        return { getViewport: () => ({ width: 100 * i, height: 200 }) };
+      },
+      async destroy() { d.destroyed++; },
+    };
+    return d;
+  };
+
+  it('returns the doc and every page size while live', async () => {
+    const { openEbookDoc } = await import('../../src/lib/reader');
+    const doc = fakeDoc(3);
+    const forget = vi.fn(async () => {});
+    const r = await openEbookDoc(new ArrayBuffer(1), { open: async () => doc, forget, live: () => true });
+    expect(r?.doc).toBe(doc);
+    expect(r?.sizes).toEqual([{ w: 100, h: 200 }, { w: 200, h: 200 }, { w: 300, h: 200 }]);
+    expect(doc.destroyed).toBe(0);
+    expect(forget).not.toHaveBeenCalled();
+  });
+
+  it('unmounted while opening -> destroys the doc, returns null', async () => {
+    const { openEbookDoc } = await import('../../src/lib/reader');
+    const doc = fakeDoc(3);
+    let live = true;
+    const r = await openEbookDoc(new ArrayBuffer(1), { open: async () => { live = false; return doc; }, forget: async () => {}, live: () => live });
+    expect(r).toBeNull();
+    expect(doc.destroyed).toBe(1);
+  });
+
+  it('unmounted during the size loop -> destroys the doc, stops reading pages', async () => {
+    const { openEbookDoc } = await import('../../src/lib/reader');
+    let live = true;
+    const seen: number[] = [];
+    const doc = fakeDoc(50, { onPage: (i) => { seen.push(i); if (i === 2) live = false; } });
+    const r = await openEbookDoc(new ArrayBuffer(1), { open: async () => doc, forget: async () => {}, live: () => live });
+    expect(r).toBeNull();
+    expect(doc.destroyed).toBe(1);
+    expect(seen).toEqual([1, 2]);
+  });
+
+  it('ANY open failure forgets the cached file and throws the BM message', async () => {
+    const { openEbookDoc } = await import('../../src/lib/reader');
+    for (const err of [Object.assign(new Error('x'), { name: 'InvalidPDFException' }), new Error('worker failed'), 'odd']) {
+      const forget = vi.fn(async () => {});
+      await expect(openEbookDoc(new ArrayBuffer(1), { open: async () => { throw err; }, forget, live: () => true }))
+        .rejects.toMatchObject({ reason: 'ralat_pelayan', message: 'Ebook tidak dapat dibuka. Sila cuba lagi.' });
+      expect(forget).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('a page that cannot be read -> doc destroyed, cache forgotten, BM error; a failing forget is ignored', async () => {
+    const { openEbookDoc } = await import('../../src/lib/reader');
+    const doc = fakeDoc(3, { failPage: 2 });
+    const forget = vi.fn(async () => { throw new Error('idb gone'); });
+    await expect(openEbookDoc(new ArrayBuffer(1), { open: async () => doc, forget, live: () => true }))
+      .rejects.toMatchObject({ message: 'Ebook tidak dapat dibuka. Sila cuba lagi.' });
+    expect(doc.destroyed).toBe(1);
+    expect(forget).toHaveBeenCalledTimes(1);
+  });
+});
