@@ -19,6 +19,10 @@ compatibility_flags = ["nodejs_compat"]
 binding = "HYPERDRIVE"
 id = "d39dc734f5e34c2fa1209cdd6fad9366"
 
+# Keep the HornetHive database awake (see scheduled() in src/index.ts).
+[triggers]
+crons = ["*/5 * * * *"]
+
 [vars]
 # REST fallback only (ignored while HYPERDRIVE is bound).
 HIVE_API_BASE = "https://api.hornethive.io/v1"

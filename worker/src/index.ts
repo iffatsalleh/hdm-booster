@@ -51,4 +51,20 @@ export default {
       if (pgHive) ctx.waitUntil(pgHive.close());
     }
   },
+
+  /**
+   * Cron keep-warm (wrangler.toml [triggers]): HornetHive Free suspends an idle database, and the first query after
+   * that waits for it to wake (seconds), which users feel as a slow login. One tiny query every few minutes keeps it
+   * awake. ~288 queries/day against Hyperdrive's 100,000/day Free quota.
+   */
+  async scheduled(_event: unknown, env: Env, ctx: Ctx): Promise<void> {
+    if (!env.HYPERDRIVE) return;
+    const pgHive = createPgHive(env.HYPERDRIVE.connectionString);
+    const run = pgHive
+      .json(`select jsonb_build_object('ok', 1) as r`)
+      .catch((e) => console.error(`keep-warm: ${e instanceof Error ? e.message : 'failed'}`))
+      .finally(() => pgHive.close());
+    ctx.waitUntil(run);
+    await run;
+  },
 };
