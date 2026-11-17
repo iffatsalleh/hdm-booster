@@ -87,6 +87,32 @@ describe('matchPackage', () => {
   });
 });
 
+describe('real BCL payment_form webhook shape', () => {
+  const body = fixture('webhook-bcl-payment-form.json');
+  const txn = body.data; // what unwrapTxn yields for a {data:{...}} envelope
+  const one = [
+    { package_id: 'basic', formable_id: '21460', amount: null, field_value: 'Pakej Basic' },
+    { package_id: 'complete', formable_id: '21460', amount: null, field_value: 'Pakej Lengkap' },
+  ];
+  it('finds the order ref in the webhook body', () => {
+    expect(g.extractOrderRef(body, fieldMap())).toBe('LINK-100001');
+    expect(g.extractOrderRef(JSON.stringify(body), fieldMap())).toBe('LINK-100001');
+    expect(g.extractOrderRef(txn, fieldMap())).toBe('LINK-100001');
+  });
+  it('paid live is read from main_data (transaction_type)', () => {
+    expect(g.isPaidLive(txn)).toBe(true);
+    expect(g.isPaidLive({ ...txn, main_data: { ...txn.main_data, is_paid: 0, status: 1 } })).toBe(false);
+    expect(g.isPaidLive({ ...txn, main_data: { ...txn.main_data, transaction_type: 'test' } })).toBe(false);
+  });
+  it('buyer, amount and paid time come from main_data', () => {
+    expect(g.buyerFromTxn(txn, fieldMap())).toEqual({ name: 'Ali Bin Abu', email: 'ali@gmail.com', phone: '60123456789' });
+    expect(g.paidAtFromTxn(txn, fieldMap())).toBe('2026-11-17T03:40:00.000Z');
+  });
+  it('package by product name even with a coupon price', () => {
+    expect(g.matchPackage(txn, one)).toEqual({ packageId: 'basic', mapped: true });
+  });
+});
+
 describe('buyerFromTxn', () => {
   it('reads custom_fields_data first and normalises', () => {
     expect(g.buyerFromTxn(fixture('txn-paid-live.json'), fieldMap())).toEqual({ name: 'Ali Bin Abu', email: 'ali@gmail.com', phone: '60123456789' });
@@ -146,6 +172,6 @@ describe('paidAtFromTxn', () => {
     const fm = g.resolveFieldMap(JSON.stringify({ paid_at: ['data.paid_on'] }));
     expect(g.paidAtFromTxn({ paid_at: '2020-01-01T00:00:00Z', data: { paid_on: '2026-11-14T00:00:00Z' } }, fm))
       .toBe('2026-11-14T00:00:00.000Z');
-    expect(g.defaultFieldMap().paid_at).toEqual(['paid_at', 'payment_date', 'updated_at']);
+    expect(g.defaultFieldMap().paid_at.slice(0, 3)).toEqual(['paid_at', 'payment_date', 'updated_at']);
   });
 });

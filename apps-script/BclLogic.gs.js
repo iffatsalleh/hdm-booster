@@ -3,14 +3,19 @@
 
 function defaultFieldMap() {
   return {
-    order: ['order_no', 'order_number', 'order_id', 'order', 'reference', 'ref', 'transaction_id', 'id',
+    // BCL payment_form webhook: {event, data:{formable_id, record_id, main_data:{order_number, payer_*, ...}}}
+    order: ['data.record_id', 'data.main_data.order_number', 'record_id', 'main_data.order_number',
+            'order_no', 'order_number', 'order_id', 'order', 'reference', 'ref', 'transaction_id', 'id',
             'data.order_no', 'data.order_number', 'data.order_id', 'data.id', 'transaction.order_no', 'transaction.id'],
-    name: ['custom_fields_data.name', 'custom_fields_data.nama', 'main_data.name', 'customer.name', 'name'],
-    email: ['custom_fields_data.email', 'main_data.email', 'customer.email', 'email'],
-    phone: ['custom_fields_data.phone', 'custom_fields_data.telefon', 'main_data.phone', 'customer.phone', 'phone'],
+    name: ['custom_fields_data.name', 'custom_fields_data.nama', 'main_data.payer_name', 'main_data.name', 'customer.name',
+           'payer_name', 'name'],
+    email: ['custom_fields_data.email', 'main_data.payer_email', 'main_data.email', 'customer.email', 'payer_email', 'email'],
+    phone: ['custom_fields_data.phone', 'custom_fields_data.telefon', 'main_data.payer_telephone_number', 'main_data.phone',
+            'customer.phone', 'payer_telephone_number', 'phone'],
     amount: ['amount', 'total', 'total_amount', 'main_data.amount'],
-    formable_id: ['formable_id', 'form_id', 'main_data.formable_id'],
-    paid_at: ['paid_at', 'payment_date', 'updated_at'],
+    formable_id: ['formable_id', 'form_id', 'main_data.formable_id', 'data.formable_id'],
+    paid_at: ['paid_at', 'payment_date', 'updated_at', 'main_data.paid_at', 'main_data.payment_date', 'main_data.updated_at',
+              'main_data.created_at'],
     field_value: []
   };
 }
@@ -75,8 +80,14 @@ function extractOrderRef(body, fieldMap) {
 
 function isPaidLive(txn) {
   if (!txn || typeof txn !== 'object') return false;
-  var paid = txn.is_paid === true || txn.is_paid === 1 || txn.is_paid === '1' || txn.is_paid === 'true';
-  return Number(txn.status) === 3 && paid && String(txn.type || '').trim().toLowerCase() === 'live';
+  // BCL payment_form transactions keep these under main_data (transaction_type instead of type).
+  var md = txn.main_data && typeof txn.main_data === 'object' ? txn.main_data : {};
+  var get = function (k) { return txn[k] !== undefined && txn[k] !== null ? txn[k] : md[k]; };
+  var isPaid = get('is_paid');
+  var paid = isPaid === true || isPaid === 1 || isPaid === '1' || isPaid === 'true';
+  var type = get('type');
+  if (type === undefined || type === null) type = get('transaction_type');
+  return Number(get('status')) === 3 && paid && String(type || '').trim().toLowerCase() === 'live';
 }
 
 function buyerFromTxn(txn, fieldMap) {

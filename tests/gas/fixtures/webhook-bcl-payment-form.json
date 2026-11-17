@@ -1,0 +1,35 @@
+{
+  "event": "payment-success",
+  "data": {
+    "formable_type": "payment_form",
+    "formable_id": 21460,
+    "form_title": "HDM BOOSTER",
+    "record_type": "Transaction",
+    "record_id": "LINK-100001",
+    "main_data": {
+      "id": "01JTESTTESTTESTTESTTESTTES",
+      "payer_name": "Ali Bin Abu",
+      "payer_email": "Ali@Gmail.com",
+      "payer_telephone_number": "012-345 6789",
+      "order_number": "LINK-100001",
+      "transaction_type": "live",
+      "currency": "MYR",
+      "subtotal_amount": "99.00",
+      "fee_amount": "1.00",
+      "amount": "2.00",
+      "payment_channel": "FPX",
+      "status": 3,
+      "status_description": "Successful",
+      "created_at": "2026-11-17 11:40:00",
+      "discount_amount": "98.00",
+      "coupon_code": "HDMTEST",
+      "is_paid": 1,
+      "source_type": "payment_form",
+      "items": [
+        { "id": 1, "productable_type": "product_item", "item": "Pakej Basic", "sku": "HDM-BASIC", "quantity": 1,
+          "unit_amount": "99.00", "normal_price": "99.00", "amount": "99.00" }
+      ]
+    },
+    "receipt_url": "https://example.invalid/receipt"
+  }
+}
